@@ -51,9 +51,14 @@ export default function Accounts() {
         setEditingId(null);
         loadAccounts(page);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Accounts] Save failed:", error);
-      alert("Failed to connect to backend server.");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const isMixedContent = apiUrl.startsWith('http:');
+      const msg = isMixedContent 
+        ? `Mixed Content Error: Frontend is HTTPS but API URL is ${apiUrl}. Update NEXT_PUBLIC_API_URL in Vercel to use HTTPS.`
+        : `Network Error: ${error?.message || "Check CORS or Render Backend status"}`;
+      alert(msg);
     } finally {
       setLoading(false);
     }

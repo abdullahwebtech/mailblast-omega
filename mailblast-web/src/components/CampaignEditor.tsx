@@ -140,7 +140,14 @@ export default function CampaignEditor({ mode, onSuccess, onCancel }: CampaignEd
         throw new Error(typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail || res.statusText);
       }
       onSuccess(data.campaign_id);
-    } catch (e: any) { setStatus('Error: ' + e.message); }
+    } catch (e: any) { 
+      const rawUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const isLocalOnProd = rawUrl.includes('localhost') && window.location.hostname !== 'localhost';
+      const msg = isLocalOnProd 
+        ? "Config Error: API URL is set to localhost. Please update NEXT_PUBLIC_API_URL on Vercel."
+        : e.message;
+      setStatus('Error: ' + msg); 
+    }
   };
 
   const inputCls = "w-full bg-white border border-[#D8DADF] rounded-lg px-3 py-2.5 text-sm text-[#0C0D10] focus:outline-none focus:border-[#1297FD] focus:ring-2 focus:ring-[rgba(18,151,253,.12)] transition-colors placeholder:text-[#8D909C]";

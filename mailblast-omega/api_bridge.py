@@ -34,6 +34,7 @@ app.add_middleware(
         "http://localhost:3000",
         "https://mailblast-omega-khaki.vercel.app",
         "https://mailblast-omega-omega.vercel.app",
+        "https://mailblast-omega.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
