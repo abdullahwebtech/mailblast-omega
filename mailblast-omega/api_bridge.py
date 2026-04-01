@@ -29,33 +29,15 @@ async def root_health():
     return {"status": "healthy", "engine": "MailBlast OMEGA", "version": "1.0.3"}
 
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
 
-class DynamicCORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        if request.method == "OPTIONS":
-            response = Response()
-            origin = request.headers.get("Origin")
-            if origin:
-                # Dynamically allow localhost and any vercel subdomain
-                if "localhost" in origin or origin.endswith(".vercel.app"):
-                    response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-User-Id, X-Requested-With"
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Max-Age"] = "86400"
-            return response
-            
-        response = await call_next(request)
-        origin = request.headers.get("Origin")
-        if origin:
-            if "localhost" in origin or origin.endswith(".vercel.app"):
-                response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        return response
-
-app.add_middleware(DynamicCORSMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex="https://.*\\.vercel\\.app|http://localhost:3000",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
