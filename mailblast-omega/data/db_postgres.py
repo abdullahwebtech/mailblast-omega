@@ -305,7 +305,9 @@ class Database:
                 INSERT INTO campaigns (name, account_ids, rotation_mode, subject, body_plain, body_html, use_html, tracking_enabled, campaign_type, scheduled_at, status, is_test, user_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
             """, (name, json.dumps(account_ids), rotation_mode, subject, body_plain, body_html, use_html, tracking_enabled, campaign_type, scheduled_at, 'scheduled' if scheduled_at else 'draft', 1 if is_test else 0, uid))
-            return cursor.fetchone()[0] if cursor.rowcount > 0 else None
+            res = cursor.fetchone()[0] if cursor.rowcount > 0 else None
+            conn.commit()
+            return res
 
     def update_campaign_progress(self, campaign_id, total, status):
         with self._get_conn() as conn:
@@ -313,6 +315,7 @@ class Database:
                 conn.execute("UPDATE campaigns SET total = ?, status = ?, started_at = CURRENT_TIMESTAMP WHERE id = ?", (total, status, campaign_id))
             elif status == "completed":
                 conn.execute("UPDATE campaigns SET status = ?, finished_at = CURRENT_TIMESTAMP WHERE id = ?", (status, campaign_id))
+            conn.commit()
 
     def get_all_campaigns(self, limit: int = 15, offset: int = 0):
         uid = current_user_id.get()
@@ -461,6 +464,7 @@ class Database:
                         VALUES (?, 'open', ?, ?)
                     """, (tracking_id, ip_address, user_agent))
                     
+                    conn.commit()
                     print(f"TRACKING: [OPENED] Item {tracking_id} tracked successfully (Hit at {int(diff)}s)")
                     return "open"
 
@@ -479,6 +483,7 @@ class Database:
                 INSERT INTO warmup_log (account_id, day_number, emails_sent, target, success_rate)
                 VALUES (?, ?, ?, ?, ?)
             """, (account_id, day_number, emails_sent, target, success_rate))
+            conn.commit()
 
     def get_warmup_day(self, account_id: int) -> int:
         with self._get_conn() as conn:
@@ -488,6 +493,7 @@ class Database:
     def increment_warmup_day(self, account_id: int):
         with self._get_conn() as conn:
             conn.execute("UPDATE accounts SET warmup_day = warmup_day + 1 WHERE id = ?", (account_id,))
+            conn.commit()
 
     def get_warmup_stats(self):
         """Returns aggregate stats for the warmup dashboard."""

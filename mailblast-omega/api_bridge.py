@@ -274,6 +274,7 @@ class SequentialQueueWorker:
                     item_ids = [str(item['id']) for item in items]
                     with db._get_conn() as conn:
                         conn.execute(f"UPDATE send_log SET status = 'processing' WHERE id IN ({','.join(item_ids)})")
+                        conn.commit()
 
                     # 4. Dispatch the batch with EXACT delay pacing
                     for idx, item in enumerate(items):
@@ -284,6 +285,7 @@ class SequentialQueueWorker:
                                 # Re-queue remaining
                                 remaining_ids = [str(i['id']) for i in items[idx:]]
                                 conn.execute(f"UPDATE send_log SET status = 'queued' WHERE id IN ({','.join(remaining_ids)})")
+                                conn.commit()
                                 break
 
                         # Send the email asynchronously (so network RTT doesn't affect our rigid delay pacing)
@@ -329,6 +331,7 @@ class SequentialQueueWorker:
             if not acc:
                 with db._get_conn() as conn:
                     conn.execute("UPDATE send_log SET status = 'failed', error_msg = 'Account not found' WHERE id = ?", (item['id'],))
+                    conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "failed"})
                 return
 
@@ -339,6 +342,7 @@ class SequentialQueueWorker:
             if not recipient or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', recipient):
                 with db._get_conn() as conn:
                     conn.execute("UPDATE send_log SET status = 'failed', error_msg = ? WHERE id = ?", (f"Invalid email: {recipient}", item['id']))
+                    conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": recipient, "status": "failed"})
                 return
 
@@ -390,6 +394,7 @@ class SequentialQueueWorker:
                     "UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?",
                     (item['id'],)
                 )
+                conn.commit()
             sync_broadcast({"type": "sent", "campaign_id": campaign['id'], "recipient": recipient, "status": "sent"})
 
             # Background IMAP sync (only if we used cache path; execute_node_dispatch does its own)
@@ -409,6 +414,7 @@ class SequentialQueueWorker:
                         "UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?",
                         (item['id'],)
                     )
+                    conn.commit()
                 sync_broadcast({"type": "sent", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "sent"})
                 return
 
@@ -421,12 +427,14 @@ class SequentialQueueWorker:
                     conn.execute("""
                         UPDATE send_log SET status = 'retrying', retry_count = ?, next_retry_at = ?, error_msg = ? WHERE id = ?
                     """, (current_retry + 1, next_retry, error_msg, item['id']))
+                    conn.commit()
             else:
                 with db._get_conn() as conn:
                     conn.execute(
                         "UPDATE send_log SET status = 'failed', error_msg = ? WHERE id = ?",
                         (error_msg, item['id'])
                     )
+                    conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "failed"})
 
 queue_worker = SequentialQueueWorker()
@@ -610,10 +618,12 @@ def run_campaign_async(campaign_id: int):
             
             with db._get_conn() as conn:
                 conn.execute("UPDATE send_log SET status='sent', sent_at=CURRENT_TIMESTAMP WHERE id=?", (row_rec['id'],))
+                conn.commit()
             sync_broadcast({"type": "sent", "campaign_id": campaign_id, "recipient": target_email, "status": "sent"})
         except Exception as e:
             with db._get_conn() as conn:
                 conn.execute("UPDATE send_log SET status='failed', error_msg=? WHERE id=?", (str(e), row_rec['id']))
+                conn.commit()
             sync_broadcast({"type": "failed", "campaign_id": campaign_id, "recipient": target_email, "status": "failed"})
         
         # Delay logic (simplified for scheduler)
@@ -1215,12 +1225,14 @@ async def edit_account(account_id: int, req: EditAccountRequest):
                 SET display_name=?, encrypted_pass=?, smtp_host=?, smtp_port=?, imap_host=?, imap_port=?
                 WHERE id=?
             """, (req.display_name, enc_str, req.smtp_host, req.smtp_port, req.imap_host, req.imap_port, account_id))
+            conn.commit()
         else:
             conn.execute("""
                 UPDATE accounts 
                 SET display_name=?, smtp_host=?, smtp_port=?, imap_host=?, imap_port=?
                 WHERE id=?
             """, (req.display_name, req.smtp_host, req.smtp_port, req.imap_host, req.imap_port, account_id))
+            conn.commit()
     return {"status": "success"}
 
 @app.post("/api/accounts/gmail/auth-url")
@@ -1342,6 +1354,7 @@ async def pause_campaign(campaign_id: int):
     db = get_db()
     with db._get_conn() as conn:
         conn.execute("UPDATE campaigns SET status = 'paused' WHERE id = ?", (campaign_id,))
+        conn.commit()
     sync_broadcast({"type": "status", "campaign_id": campaign_id, "status": "paused"})
     return {"status": "success", "message": "Campaign paused."}
 
@@ -1351,6 +1364,7 @@ async def resume_campaign(campaign_id: int):
     db = get_db()
     with db._get_conn() as conn:
         conn.execute("UPDATE campaigns SET status = 'running' WHERE id = ?", (campaign_id,))
+        conn.commit()
     sync_broadcast({"type": "status", "campaign_id": campaign_id, "status": "running"})
     return {"status": "success", "message": "Campaign resumed."}
 
@@ -1361,6 +1375,7 @@ async def cancel_campaign(campaign_id: int):
     with db._get_conn() as conn:
         conn.execute("UPDATE campaigns SET status = 'cancelled' WHERE id = ?", (campaign_id,))
         conn.execute("UPDATE send_log SET status = 'cancelled' WHERE campaign_id = ? AND status = 'queued'", (campaign_id,))
+        conn.commit()
     sync_broadcast({"type": "status", "campaign_id": campaign_id, "status": "cancelled"})
     return {"status": "success", "message": "Campaign cancelled."}
 
