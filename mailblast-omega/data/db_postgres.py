@@ -47,7 +47,6 @@ class Database:
         return ConnWrapper(self.pool)
     def _init_db(self):
         schema = """
-        -- Accounts
         CREATE TABLE IF NOT EXISTS accounts (
             id              SERIAL PRIMARY KEY,
             provider        TEXT NOT NULL,
@@ -60,8 +59,8 @@ class Database:
             smtp_port       INTEGER DEFAULT 587,
             smtp_security   TEXT DEFAULT 'STARTTLS',
             username        TEXT,
-            encrypted_pass  TEXT,           -- Fernet encrypted
-            daily_limit     INTEGER DEFAULT 0,  -- 0 = unlimited
+            encrypted_pass  TEXT,
+            daily_limit     INTEGER DEFAULT 0,
             warmup_mode     INTEGER DEFAULT 0,
             warmup_day      INTEGER DEFAULT 0,
             total_sent      INTEGER DEFAULT 0,
@@ -73,19 +72,18 @@ class Database:
             UNIQUE(email, user_id)
         );
 
-        -- Campaigns
         CREATE TABLE IF NOT EXISTS campaigns (
             id              SERIAL PRIMARY KEY,
             name            TEXT NOT NULL,
-            account_ids     TEXT,           -- JSON array of account IDs (rotation)
-            rotation_mode   TEXT DEFAULT 'single',  -- single | round_robin | random
+            account_ids     TEXT,
+            rotation_mode   TEXT DEFAULT 'single',
             subject         TEXT,
             body_plain      TEXT,
             body_html       TEXT,
             use_html        INTEGER DEFAULT 0,
             tracking_enabled INTEGER DEFAULT 1,
             click_tracking  INTEGER DEFAULT 1,
-            campaign_type   TEXT DEFAULT 'campaign', -- 'campaign' | 'single'
+            campaign_type   TEXT DEFAULT 'campaign',
             status          TEXT DEFAULT 'draft',
             total           INTEGER DEFAULT 0,
             sent            INTEGER DEFAULT 0,
@@ -94,28 +92,29 @@ class Database:
             clicked         INTEGER DEFAULT 0,
             bounced         INTEGER DEFAULT 0,
             unsubscribed    INTEGER DEFAULT 0,
-            scheduled_at    TEXT,           -- ISO datetime if scheduled
+            scheduled_at    TEXT,
             timezone        TEXT,
             created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
             started_at      TEXT,
             finished_at     TEXT,
             is_test         INTEGER DEFAULT 0,
-            delay_seconds   INTEGER DEFAULT 5
+            delay_seconds   INTEGER DEFAULT 5,
+            user_id         TEXT,
+            deleted_at      TEXT DEFAULT NULL
         );
 
-        -- Per-email send log
         CREATE TABLE IF NOT EXISTS send_log (
             id              SERIAL PRIMARY KEY,
             campaign_id     INTEGER REFERENCES campaigns(id),
             account_id      INTEGER REFERENCES accounts(id),
             recipient       TEXT NOT NULL,
             website         TEXT,
-            row_data        TEXT,           -- full JSON of the Excel row
-            status          TEXT,           -- 'queued' | 'sent' | 'failed' | 'retrying' | 'cancelled'
+            row_data        TEXT,
+            status          TEXT,
             error_msg       TEXT,
-            tracking_id     TEXT UNIQUE,    -- UUID for open tracking
+            tracking_id     TEXT UNIQUE,
             retry_count     INTEGER DEFAULT 0,
-            next_retry_at   TEXT,           -- ISO UTC timestamp
+            next_retry_at   TEXT,
             opened          INTEGER DEFAULT 0,
             open_count      INTEGER DEFAULT 0,
             first_opened_at TEXT,
@@ -124,77 +123,72 @@ class Database:
             click_count     INTEGER DEFAULT 0,
             bounced         INTEGER DEFAULT 0,
             sent_at         TEXT DEFAULT CURRENT_TIMESTAMP,
-            sender_ignore_until TEXT  -- ISO UTC. Cooldown for sender opens
+            sender_ignore_until TEXT,
+            deleted_at      TEXT DEFAULT NULL
         );
 
-        -- Tracking events (pixel hits)
         CREATE TABLE IF NOT EXISTS tracking_events (
             id          SERIAL PRIMARY KEY,
             tracking_id TEXT REFERENCES send_log(tracking_id),
-            event_type  TEXT,               -- 'open' | 'click'
+            event_type  TEXT,
             ip_address  TEXT,
             user_agent  TEXT,
-            url_clicked TEXT,               -- for click events
+            url_clicked TEXT,
             occurred_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Scheduled jobs
         CREATE TABLE IF NOT EXISTS scheduled_jobs (
             id              SERIAL PRIMARY KEY,
             campaign_id     INTEGER REFERENCES campaigns(id),
-            scheduled_at    TEXT NOT NULL,  -- ISO datetime UTC
+            scheduled_at    TEXT NOT NULL,
             timezone        TEXT,
-            local_time      TEXT,           -- display time in target tz
-            status          TEXT DEFAULT 'pending',  -- pending | running | done | cancelled
+            local_time      TEXT,
+            status          TEXT DEFAULT 'pending',
             apscheduler_id  TEXT UNIQUE,
             created_at      TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Saved templates
         CREATE TABLE IF NOT EXISTS templates (
             id          SERIAL PRIMARY KEY,
             name        TEXT NOT NULL,
             subject     TEXT,
             body_plain  TEXT,
             body_html   TEXT,
-            variables   TEXT,               -- JSON list of variable names found
+            variables   TEXT,
             use_html    INTEGER DEFAULT 0,
             user_id     TEXT,
             created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at  TEXT
+            updated_at  TEXT,
+            deleted_at  TEXT DEFAULT NULL
         );
 
-        -- Global blacklist / suppression
         CREATE TABLE IF NOT EXISTS blacklist (
             id          SERIAL PRIMARY KEY,
             email       TEXT NOT NULL,
-            reason      TEXT,               -- 'bounced' | 'unsubscribed' | 'manual'
+            reason      TEXT,
             user_id     TEXT,
             added_at    TEXT DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(email, user_id)
         );
 
-        -- Custom variable definitions
         CREATE TABLE IF NOT EXISTS variable_definitions (
             id          SERIAL PRIMARY KEY,
-            name        TEXT UNIQUE NOT NULL,   -- e.g. "FirstName"
+            name        TEXT UNIQUE NOT NULL,
             description TEXT,
             default_val TEXT,
-            column_hint TEXT,                   -- suggested Excel column name
+            column_hint TEXT,
             created_at  TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- AI generation history
         CREATE TABLE IF NOT EXISTS ai_history (
             id          SERIAL PRIMARY KEY,
-            engine      TEXT,               -- 'gpt4o' | 'claude' | 'groq/llama-3.3-70b'
+            engine      TEXT,
             prompt      TEXT,
             output      TEXT,
             tokens_used INTEGER,
             created_at  TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Account warm-up log
         CREATE TABLE IF NOT EXISTS warmup_log (
             id          SERIAL PRIMARY KEY,
             account_id  INTEGER REFERENCES accounts(id),
@@ -205,8 +199,6 @@ class Database:
             date        TEXT DEFAULT CURRENT_DATE
         );
 
-        -- Internal IPs (Sender devices)
-        -- Sender fingerprints (Dashboards/Sessions)
         CREATE TABLE IF NOT EXISTS internal_ips (
             ip              TEXT,
             user_agent      TEXT,
@@ -214,50 +206,15 @@ class Database:
             PRIMARY KEY (ip, user_agent)
         );
         """
-        with self._get_conn() as conn:
-            conn.executescript(schema)
-            
-            # Migration: add retry_count if not exists
-            try:
-                conn.execute("ALTER TABLE send_log ADD COLUMN retry_count INTEGER DEFAULT 0")
-            except: pass
-            
-            # Migration: add next_retry_at if not exists
-            try:
-                conn.execute("ALTER TABLE send_log ADD COLUMN next_retry_at TEXT")
-            except: pass
-
-            # Migration: add delay_seconds to campaigns if not exists
-            try:
-                conn.execute("ALTER TABLE campaigns ADD COLUMN delay_seconds INTEGER DEFAULT 5")
-            except: pass
-            
-            # Migration: add user_id column
-            try:
-                conn.execute("ALTER TABLE accounts ADD COLUMN user_id TEXT")
-            except: pass
-            try:
-                conn.execute("ALTER TABLE campaigns ADD COLUMN user_id TEXT")
-            except: pass
-            try:
-                conn.execute("ALTER TABLE templates ADD COLUMN user_id TEXT")
-            except: pass
-
-            # Migration: add deleted_at
-            try:
-                conn.execute("ALTER TABLE accounts ADD COLUMN deleted_at TEXT DEFAULT NULL")
-            except: pass
-            try:
-                conn.execute("ALTER TABLE campaigns ADD COLUMN deleted_at TEXT DEFAULT NULL")
-            except: pass
-            try:
-                conn.execute("ALTER TABLE send_log ADD COLUMN deleted_at TEXT DEFAULT NULL")
-            except: pass
-            try:
-                conn.execute("ALTER TABLE templates ADD COLUMN deleted_at TEXT DEFAULT NULL")
-            except: pass
-
-            conn.commit()
+        print("DB_BOOTSTRAP: Initializing PostgreSQL Schema...")
+        try:
+            with self._get_conn() as conn:
+                conn.executescript(schema)
+                conn.commit()
+            print("DB_BOOTSTRAP: Schema initialized successfully.")
+        except Exception as e:
+            print(f"DB_BOOTSTRAP: Error during schema init: {e}")
+            raise e
 
     # --- Blacklist ---
     def get_blacklist_set(self) -> set:
