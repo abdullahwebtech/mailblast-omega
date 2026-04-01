@@ -21,15 +21,18 @@ class Database:
         if "sslmode=" not in self.db_url:
             separator = "&" if "?" in self.db_url else "?"
             self.db_url += f"{separator}sslmode=require"
+        
+        # If using transaction pooler (6543), enable pgbouncer compatibility
+        if ":6543" in self.db_url and "pgbouncer=true" not in self.db_url:
+            separator = "&" if "?" in self.db_url else "?"
+            self.db_url += f"{separator}pgbouncer=true"
             
-        # minconn=0 allows the pool to start without an immediate connection (Lazy Loading)
-        # This prevents the whole server from crashing if Supabase has a momentary issue on boot.
-        self.pool = ThreadedConnectionPool(0, 80, dsn=self.db_url)
+        # Reduced pool size for better stability on free tiers
+        self.pool = ThreadedConnectionPool(0, 20, dsn=self.db_url)
         try:
-            # Only try to init if we can actually get a connection quickly
             self._init_db()
-        except Exception as e:
-            print(f"DB_BOOTSTRAP: Warning - Initial schema check deferred: {e}")
+        except:
+            print("DB_BOOTSTRAP: Deferred init.")
 
     def _get_conn(self):
         class ConnWrapper:
@@ -43,9 +46,7 @@ class Database:
                 for attempt in range(MAX_RETRIES):
                     try:
                         self.conn = self.pool.getconn()
-                        # Verify health before returning
-                        with self.conn.cursor() as tmp_cur:
-                            tmp_cur.execute("SELECT 1")
+                        # Removed SELECT 1 ping - it's faster and more stable with pgbouncer
                         self.conn.autocommit = False
                         return self
                     except Exception as e:
@@ -55,7 +56,6 @@ class Database:
                             except: pass
                             self.conn = None
                         if attempt < MAX_RETRIES - 1:
-                            # Increasing wait time: 1s, 2s, 4s, 8s
                             time.sleep(1.0 * (2 ** attempt))
                 
                 if last_err: raise last_err
@@ -65,7 +65,7 @@ class Database:
                 if exc_type:
                     try: self.conn.rollback()
                     except: pass
-                # Return the connection back to the pool cleanly
+                # Clean return to pool
                 self.pool.putconn(self.conn)
             def execute(self, query, params=None):
                 cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
