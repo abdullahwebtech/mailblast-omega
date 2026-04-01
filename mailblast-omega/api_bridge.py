@@ -378,8 +378,8 @@ class SequentialQueueWorker:
         self.thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.is_running = False
         self.smtp_pool = SMTPConnectionPool(max_connections_per_account=20)
-        self.executor = ThreadPoolExecutor(max_workers=50) # Higher capacity for parallel runners
-        self.active_runners = {} # campaign_id -> CampaignRunner
+        self.executor = ThreadPoolExecutor(max_workers=20) # Conservative workers for Render Free Tier
+        self.active_runners = {} 
         self.alert_event = threading.Event()
 
     def start(self):
@@ -644,7 +644,7 @@ def _build_email_message(acc: dict, to_email: str, subject: str, body: str, trac
     msg['Message-ID'] = make_msgid(domain=acc['email'].split('@')[-1] if '@' in acc['email'] else 'mailblast.local')
     msg.set_content(plain_body, charset='utf-8')
 
-    domain = os.getenv("TRACKING_DOMAIN", "http://localhost:8000")
+    domain = os.getenv("TRACKING_DOMAIN", "https://mailblast-omega.onrender.com").rstrip('/')
     pixel_html = ""
     if tracking_id:
         pixel_url = f"{domain}/api/t/o/{tracking_id}.gif"
@@ -723,7 +723,7 @@ def execute_node_dispatch(acc: dict, to_email: str, subject: str, body: str, tra
     msg, _ = _build_email_message(acc, to_email, subject, body, tracking_id, attachment_path)
     
     # DEBUG: Show tracking URL for manual verification
-    domain = os.getenv("TRACKING_DOMAIN", "http://localhost:8000")
+    domain = os.getenv("TRACKING_DOMAIN", "https://mailblast-omega.onrender.com").rstrip('/')
     if tracking_id:
         print(f"DEBUG: Sent to {to_email} | Tracking URL: {domain}/api/t/o/{tracking_id}.gif")
 
@@ -1032,7 +1032,7 @@ async def track_open(tracking_id: str, request: Request, background_tasks: Backg
     ua = request.headers.get('user-agent', '')
     
     # Detailed logging for debugging
-    domain = os.getenv("TRACKING_DOMAIN", "http://localhost:8000")
+    domain = os.getenv("TRACKING_DOMAIN", "https://mailblast-omega.onrender.com").rstrip('/')
     print(f"TRACKING HIT: {tracking_id} | Domain: {domain} | IP: {ip} | UA: {ua}")
     if "ngrok" in domain and ".gif" in request.url.path:
         print(f"DEBUG: Tracking pixel requested via ngrok: {request.url}")
@@ -1473,4 +1473,5 @@ async def api_delete_all_active(category: str):
     return {"status": "success"} if success else {"status": "error"}
 
 if __name__ == "__main__":
-    uvicorn.run("api_bridge:app", host="0.0.0.0", port=8000, reload=True)
+    # Disable reload in production to save CPU
+    uvicorn.run("api_bridge:app", host="0.0.0.0", port=8000, reload=False)

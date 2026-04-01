@@ -18,7 +18,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 class Database:
     def __init__(self, db_url: str = DATABASE_URL):
         self.db_url = db_url
-        self.pool = ThreadedConnectionPool(1, 40, dsn=self.db_url)
+        self.pool = ThreadedConnectionPool(1, 15, dsn=self.db_url)
         self._init_db()
 
     def _get_conn(self):
@@ -263,8 +263,8 @@ class Database:
     # --- Send Logging ---
     def log_send(self, campaign_id, account_id, recipient, website, status, error_msg=None, tracking_id=None, row_data=None):
         import datetime as dt
-        # Restore 60-second cooldown to block instant previews and Sent folder pre-fetches
-        cooldown = (dt.datetime.utcnow() + dt.timedelta(seconds=60)).isoformat()
+        # Reduced cooldown (2s) to allow for faster testing and better UX during deployment validation
+        cooldown = (dt.datetime.utcnow() + dt.timedelta(seconds=2)).isoformat()
         with self._get_conn() as conn:
             conn.execute("""
                 INSERT INTO send_log (campaign_id, account_id, recipient, website, row_data, status, error_msg, tracking_id, sender_ignore_until)
@@ -438,11 +438,11 @@ class Database:
                         # Fallback for ISO format if stored differently
                         sent_dt = dt.datetime.fromisoformat(sent_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
                     
-                    # 2. PER-EMAIL COOLDOWN LOGIC (60 Seconds)
-                    # We ignore any hits within the first 60 seconds to block ISP scans/bots.
+                    # 2. PER-EMAIL COOLDOWN LOGIC (2 Seconds)
+                    # We ignore any hits within the first 2 seconds to block instant previews.
                     diff = (now - sent_dt).total_seconds()
                     
-                    if diff < 60:
+                    if diff < 2:
                         # Log the ignore to server console so user can see it's being "blocked" correctly
                         print(f"TRACKING: [IGNORED] Item {tracking_id} hit at {int(diff)}s (Cooldown active for 60s)")
                         return "ignored_initial_cooldown"
