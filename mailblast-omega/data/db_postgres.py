@@ -865,7 +865,8 @@ class Database:
         with self._get_conn() as conn:
             valid_tables = ["campaigns", "accounts", "send_log", "templates"]
             for table in valid_tables:
-                conn.execute(f"DELETE FROM {table} WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '7 days'")
+                # PostgreSQL needs explicit cast from TEXT to TIMESTAMPTZ for the comparison
+                conn.execute(f"DELETE FROM {table} WHERE deleted_at IS NOT NULL AND CAST(deleted_at AS TIMESTAMPTZ) < NOW() - INTERVAL '7 days'")
             conn.commit()
 
 # Global Database Instance functions (used extensively by the FastAPI bridge and GUI apps)
