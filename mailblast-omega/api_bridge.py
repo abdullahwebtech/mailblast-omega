@@ -199,131 +199,94 @@ class SMTPConnectionPool:
                         except: pass
                 self.pools.clear()
 
-
-class SequentialQueueWorker:
-    """Sends emails with exact, unblocked delays between queue items.
-    Uses a ThreadPool to prevent SMTP network latency from slowing down the specified pace.
-    Ensures blazing fast sub-second staggering (e.g. 0.1s) between dispatches."""
-
-    def __init__(self):
-        self.thread = threading.Thread(target=self._worker_loop, daemon=True)
-        self.is_running = False
-        self.smtp_pool = SMTPConnectionPool(max_connections_per_account=8)
-        self.executor = ThreadPoolExecutor(max_workers=8)  # STRICT limit to prevent IP Provider Lockout & Freezing
-
-    def start(self):
+class CampaignRunner(threading.Thread):
+    """Dedicated thread for a single campaign to ensure exact pacing without blocking others."""
+    def __init__(self, campaign_id, db, smtp_pool, executor):
+        super().__init__(name=f"CampaignRunner-{campaign_id}", daemon=True)
+        self.campaign_id = campaign_id
+        self.db = db
+        self.smtp_pool = smtp_pool
+        self.executor = executor
         self.is_running = True
-        self.thread.start()
 
-    def _close_smtp(self, account_id=None):
-        """Close one or all cached SMTP connections."""
-        self.smtp_pool.close_all(account_id)
-
-    # ── Main Worker Loop ──────────────────────────────────────────────
-    def _worker_loop(self):
-        from data.db import get_db
-        import json
-        db = get_db()
-
+    def run(self):
+        print(f"WORKER: Starting parallel runner for Campaign #{self.campaign_id}")
         while self.is_running:
             try:
-                # 1. Find all running campaigns
-                with db._get_conn() as conn:
-                    running_camps = conn.execute(
-                        "SELECT * FROM campaigns WHERE status = 'running'"
-                    ).fetchall()
+                # 1. Fetch current campaign metadata
+                # We fetch fresh every batch to see if status changed to paused/cancelled
+                with self.db._get_conn() as conn:
+                    camp = conn.execute("SELECT * FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
+                
+                if not camp or camp['status'] not in ('running',):
+                    print(f"WORKER: Campaign #{self.campaign_id} no longer running. Stopping runner.")
+                    self.is_running = False
+                    break
 
-                if not running_camps:
-                    time.sleep(2)
+                delay_seconds = float(camp.get('delay_seconds') or 0.1)
+                
+                # 2. Pick a BATCH of queued items
+                with self.db._get_conn() as conn:
+                    now_str = datetime.now(timezone.utc).isoformat()
+                    items = conn.execute("""
+                        SELECT * FROM send_log
+                        WHERE campaign_id = ?
+                        AND (status = 'queued' OR (status = 'retrying' AND next_retry_at <= ?))
+                        ORDER BY status='retrying' DESC, id ASC
+                        LIMIT 100
+                    """, (self.campaign_id, now_str)).fetchall()
+
+                if not items:
+                    # Check if actually complete
+                    with self.db._get_conn() as conn:
+                        pending = conn.execute(
+                            "SELECT COUNT(*) as count FROM send_log WHERE campaign_id = ? AND status IN ('queued', 'retrying', 'processing')",
+                            (self.campaign_id,)
+                        ).fetchone()
+                        if pending['count'] == 0:
+                            self.db.update_campaign_progress(self.campaign_id, camp['total'], "completed")
+                            sync_broadcast({"type": "status", "campaign_id": self.campaign_id, "status": "completed"})
+                            self.is_running = False
+                            break
+                    # Wait briefly if still marked running but queue is empty (waiting for retries)
+                    time.sleep(5)
                     continue
 
-                did_work = False
-
-                for campaign in running_camps:
-                    campaign = dict(campaign)
-                    delay_seconds = float(campaign.get('delay_seconds') or 0.1)
-
-                    # 2. Pick a BATCH of queued or retrying items
-                    with db._get_conn() as conn:
-                        now_str = datetime.now(timezone.utc).isoformat()
-                        items = conn.execute("""
-                            SELECT * FROM send_log
-                            WHERE campaign_id = ?
-                            AND (status = 'queued' OR (status = 'retrying' AND next_retry_at <= ?))
-                            ORDER BY status='retrying' DESC, id ASC
-                            LIMIT 100
-                        """, (campaign['id'], now_str)).fetchall()
-
-                    if not items:
-                        # Check if campaign is complete
-                        with db._get_conn() as conn:
-                            pending = conn.execute(
-                                "SELECT COUNT(*) as count FROM send_log WHERE campaign_id = ? AND status IN ('queued', 'retrying', 'processing')",
-                                (campaign['id'],)
-                            ).fetchone()
-                            if pending['count'] == 0:
-                                db.update_campaign_progress(campaign['id'], campaign['total'], "completed")
-                                sync_broadcast({"type": "status", "campaign_id": campaign['id'], "status": "completed"})
-                                self._close_smtp()  # Clean up connections when campaign done
-                        continue
-
-                    did_work = True
-                    items = [dict(it) for it in items]
-
-                    # 3. Lock this entire batch instantly to 'processing'
-                    item_ids = [str(item['id']) for item in items]
-                    with db._get_conn() as conn:
-                        conn.execute(f"UPDATE send_log SET status = 'processing' WHERE id IN ({','.join(item_ids)})")
-                        conn.commit()
-
-                    # 4. Dispatch the batch with EXACT delay pacing
-                    for idx, item in enumerate(items):
-                        # Last check: if paused/cancelled, abort batch instantly
-                        with db._get_conn() as conn:
-                            status_row = conn.execute("SELECT status FROM campaigns WHERE id = ?", (campaign['id'],)).fetchone()
-                            if status_row and status_row['status'] not in ('running',):
-                                # Re-queue remaining
-                                remaining_ids = [str(i['id']) for i in items[idx:]]
-                                conn.execute(f"UPDATE send_log SET status = 'queued' WHERE id IN ({','.join(remaining_ids)})")
-                                conn.commit()
-                                break
-
-                        # Send the email asynchronously (so network RTT doesn't affect our rigid delay pacing)
-                        self.executor.submit(self._dispatch_single, item, campaign, db)
-
-                        # Respect delay_seconds exactly
-                        sleep_elapsed = 0.0
-                        while sleep_elapsed < delay_seconds:
-                            chunk = min(0.1, delay_seconds - sleep_elapsed)
-                            time.sleep(chunk)
-                            sleep_elapsed += chunk
-                            # Check if paused mid-sleep if delay is long
-                            if sleep_elapsed >= 1.0 or sleep_elapsed >= delay_seconds:
-                                with db._get_conn() as conn:
-                                    status_row = conn.execute("SELECT status FROM campaigns WHERE id = ?", (campaign['id'],)).fetchone()
-                                    if status_row and status_row['status'] not in ('running',):
-                                        break
-                    
-                    # End of batch loop
+                items = [dict(it) for it in items]
                 
-                # If no campaign had work, sleep briefly
-                if not did_work:
-                    time.sleep(2)
+                # 3. Lock batch to 'processing'
+                item_ids = [str(item['id']) for item in items]
+                with self.db._get_conn() as conn:
+                    conn.execute(f"UPDATE send_log SET status = 'processing' WHERE id IN ({','.join(item_ids)})")
+                    conn.commit()
 
-            except Exception as outer_e:
-                print(f"Queue Worker Error: {outer_e}")
-                import traceback
-                traceback.print_exc()
+                # 4. Dispatch with EXACT pacing
+                for item in items:
+                    # Re-check status before every single email dispatch for instant pause response
+                    with self.db._get_conn() as conn:
+                        status_row = conn.execute("SELECT status FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
+                        if not status_row or status_row['status'] != 'running':
+                            # Re-queue remaining items in this batch
+                            rem_idx = items.index(item)
+                            rem_ids = [str(i['id']) for i in items[rem_idx:]]
+                            conn.execute(f"UPDATE send_log SET status = 'queued' WHERE id IN ({','.join(rem_ids)})")
+                            conn.commit()
+                            self.is_running = False
+                            return
+
+                    # Offload SMTP network latency to the executor pool
+                    self.executor.submit(self._dispatch_single, item, camp, self.db)
+
+                    # Pacing Sleep (Rigidly accurate)
+                    time.sleep(delay_seconds)
+
+            except Exception as e:
+                print(f"Runner Error [Camp #{self.campaign_id}]: {e}")
                 time.sleep(5)
 
-    # ── Blazing Fast Dispatch ─────────────────────────────────────────
     def _dispatch_single(self, item, campaign, db):
-        """Send a single email using cached SMTP connection for speed.
-        Falls back to execute_node_dispatch if the cache fails."""
-        import json
-        import threading as _threading
-        import re
-
+        # ... logic as before ...
+        import json, re, threading as _threading
         account_id = item['account_id']
         try:
             with db._get_conn() as conn:
@@ -336,8 +299,6 @@ class SequentialQueueWorker:
                 return
 
             acc_dict = dict(acc)
-
-            # Validate recipient
             recipient = item['recipient'].strip()
             if not recipient or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', recipient):
                 with db._get_conn() as conn:
@@ -346,7 +307,6 @@ class SequentialQueueWorker:
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": recipient, "status": "failed"})
                 return
 
-            # Prepare dynamic data
             row_data = json.loads(item['row_data'] or "{}")
             subject_f = campaign['subject']
             body_f = campaign['body_plain']
@@ -361,13 +321,10 @@ class SequentialQueueWorker:
                 if filename:
                     from pathlib import Path
                     p = Path("uploads/attachments") / row_data['_attachments_batch_id'] / str(filename)
-                    if p.exists():
-                        attachment_path = str(p)
+                    if p.exists(): attachment_path = str(p)
 
-            # Build message once (reused across retry attempts)
             msg, _ = _build_email_message(acc_dict, recipient, subject_f, body_f, item['tracking_id'], attachment_path)
 
-            # ── BLAZING DISPATCH: Thread-Safe Cached SMTP Connection ──
             sent_via_cache = False
             for attempt in range(2):
                 server = None
@@ -381,63 +338,90 @@ class SequentialQueueWorker:
                     if server:
                         try: server.quit()
                         except: pass
-                    if attempt == 0:
-                        continue  # Retry with fresh connection
-                    # Both cache attempts failed — fall back to proven retry engine
+                    if attempt == 0: continue
                     execute_node_dispatch(acc_dict, recipient, subject_f, body_f, item['tracking_id'], attachment_path)
-                    # execute_node_dispatch handles its own IMAP sync
                     sent_via_cache = False
 
-            # ── SUCCESS: Mark Sent ──
             with db._get_conn() as conn:
-                conn.execute(
-                    "UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (item['id'],)
-                )
+                conn.execute("UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?", (item['id'],))
                 conn.commit()
             sync_broadcast({"type": "sent", "campaign_id": campaign['id'], "recipient": recipient, "status": "sent"})
 
-            # Background IMAP sync (only if we used cache path; execute_node_dispatch does its own)
             if sent_via_cache:
-                _threading.Thread(
-                    target=background_imap_sync,
-                    args=(acc_dict, recipient, subject_f, body_f, item['tracking_id'], attachment_path),
-                    daemon=True
-                ).start()
+                _threading.Thread(target=background_imap_sync, args=(acc_dict, recipient, subject_f, body_f, item['tracking_id'], attachment_path), daemon=True).start()
 
         except Exception as e:
             error_msg = str(e)
-            # If accidentally caught a success message as an error
             if "250" in error_msg or "235" in error_msg or "Queued" in error_msg:
                 with db._get_conn() as conn:
-                    conn.execute(
-                        "UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?",
-                        (item['id'],)
-                    )
+                    conn.execute("UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?", (item['id'],))
                     conn.commit()
                 sync_broadcast({"type": "sent", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "sent"})
                 return
 
             current_retry = (item['retry_count'] or 0)
             if current_retry < 3:
-                backoffs = [5, 10, 20]
-                wait_sec = backoffs[min(current_retry, 2)]
+                backoffs = [5, 10, 20]; wait_sec = backoffs[min(current_retry, 2)]
                 next_retry = (datetime.now(timezone.utc) + timedelta(seconds=wait_sec)).isoformat()
                 with db._get_conn() as conn:
-                    conn.execute("""
-                        UPDATE send_log SET status = 'retrying', retry_count = ?, next_retry_at = ?, error_msg = ? WHERE id = ?
-                    """, (current_retry + 1, next_retry, error_msg, item['id']))
+                    conn.execute("UPDATE send_log SET status='retrying', retry_count=?, next_retry_at=?, error_msg=? WHERE id=?", (current_retry+1, next_retry, error_msg, item['id']))
                     conn.commit()
             else:
                 with db._get_conn() as conn:
-                    conn.execute(
-                        "UPDATE send_log SET status = 'failed', error_msg = ? WHERE id = ?",
-                        (error_msg, item['id'])
-                    )
+                    conn.execute("UPDATE send_log SET status='failed', error_msg=? WHERE id=?", (error_msg, item['id']))
                     conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "failed"})
 
+class SequentialQueueWorker:
+    """Manages parallel campaign runners."""
+    def __init__(self):
+        self.thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self.is_running = False
+        self.smtp_pool = SMTPConnectionPool(max_connections_per_account=20)
+        self.executor = ThreadPoolExecutor(max_workers=50) # Higher capacity for parallel runners
+        self.active_runners = {} # campaign_id -> CampaignRunner
+        self.alert_event = threading.Event()
+
+    def start(self):
+        self.is_running = True
+        self.thread.name = "WorkerManager"
+        self.thread.start()
+
+    def alert(self):
+        """Wake up the worker instantly (e.g. when user clicks Launch)"""
+        self.alert_event.set()
+
+    def _worker_loop(self):
+        from data.db import get_db
+        db = get_db()
+        while self.is_running:
+            try:
+                # 1. GC: Remove dead runners
+                to_remove = [cid for cid, r in self.active_runners.items() if not r.is_alive()]
+                for cid in to_remove: del self.active_runners[cid]
+
+                # 2. Monitor: Find campaigns marked 'running'
+                with db._get_conn() as conn:
+                    running_camps = conn.execute("SELECT id FROM campaigns WHERE status = 'running'").fetchall()
+
+                # 3. Spawn: Start runners for any campaign that isn't running yet in parallel
+                for row in running_camps:
+                    cid = row['id']
+                    if cid not in self.active_runners:
+                        print(f"MANAGER: Spawning parallel runner for Campaign #{cid}")
+                        runner = CampaignRunner(cid, db, self.smtp_pool, self.executor)
+                        self.active_runners[cid] = runner
+                        runner.start()
+
+                self.alert_event.wait(5) # Wait 5s or until alerted
+                self.alert_event.clear()
+
+            except Exception as e:
+                print(f"Worker Manager Error: {e}")
+                time.sleep(5)
+
 queue_worker = SequentialQueueWorker()
+
 class GenerateRequest(BaseModel):
     brief: dict
     mode: str = "email"
@@ -587,6 +571,7 @@ def run_campaign_async(campaign_id: int):
     if not active_acc: return
 
     update_campaign_progress(campaign_id, total=len(rows), status="running")
+    queue_worker.alert()
 
     for i, row_rec in enumerate(rows):
         t_start = time.time()
@@ -633,6 +618,7 @@ def run_campaign_async(campaign_id: int):
             time.sleep(1) # Minimal delay for scheduler
         
     update_campaign_progress(campaign_id, total=len(rows), status="completed")
+    queue_worker.alert()
 
 class TestSendRequest(BaseModel):
     subject: str
@@ -885,6 +871,7 @@ def process_campaign_bulk(req: CampaignLaunchRequest, campaign_id: int):
         conn.commit()
     
     sync_broadcast({"type": "status", "campaign_id": campaign_id, "status": "running"})
+    queue_worker.alert()
 
 
 @app.post("/api/campaign/launch")

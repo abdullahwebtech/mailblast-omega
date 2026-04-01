@@ -18,7 +18,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 class Database:
     def __init__(self, db_url: str = DATABASE_URL):
         self.db_url = db_url
-        self.pool = ThreadedConnectionPool(1, 10, dsn=self.db_url)
+        self.pool = ThreadedConnectionPool(1, 40, dsn=self.db_url)
         self._init_db()
 
     def _get_conn(self):
@@ -205,6 +205,15 @@ class Database:
             last_seen       TEXT DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (ip, user_agent)
         );
+
+        -- Performance Indexes
+        CREATE INDEX IF NOT EXISTS idx_send_log_campaign_id ON send_log(campaign_id);
+        CREATE INDEX IF NOT EXISTS idx_send_log_account_id ON send_log(account_id);
+        CREATE INDEX IF NOT EXISTS idx_send_log_status ON send_log(status);
+        CREATE INDEX IF NOT EXISTS idx_send_log_tracking_id ON send_log(tracking_id);
+        CREATE INDEX IF NOT EXISTS idx_campaigns_user_id ON campaigns(user_id);
+        CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_tracking_events_tracking_id ON tracking_events(tracking_id);
         """
         print("DB_BOOTSTRAP: Initializing PostgreSQL Schema...")
         try:
