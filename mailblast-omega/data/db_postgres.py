@@ -1,72 +1,65 @@
 import psycopg2
 import psycopg2.extras
-from psycopg2.pool import ThreadedConnectionPool
 import json
 import os
 from datetime import datetime
 import contextvars
+import time
 
 current_user_id = contextvars.ContextVar('current_user_id', default=None)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Map to mailblast-omega/database/omega.db strictly
 DB_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'database', 'omega.db'))
-
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 class Database:
     def __init__(self, db_url: str = DATABASE_URL):
         self.db_url = db_url
+        # Ensure SSL is required for Supabase
         if "sslmode=" not in self.db_url:
             separator = "&" if "?" in self.db_url else "?"
             self.db_url += f"{separator}sslmode=require"
         
-        # If using transaction pooler (6543), enable pgbouncer compatibility
-        if ":6543" in self.db_url and "pgbouncer=true" not in self.db_url:
-            separator = "&" if "?" in self.db_url else "?"
-            self.db_url += f"{separator}pgbouncer=true"
-            
-        # Reduced pool size for better stability on free tiers
-        self.pool = ThreadedConnectionPool(0, 20, dsn=self.db_url)
+        print(f"DB_INIT: Connecting to PostgreSQL (direct mode, no pool)")
         try:
             self._init_db()
-        except:
-            print("DB_BOOTSTRAP: Deferred init.")
+            print("DB_INIT: Schema initialized successfully.")
+        except Exception as e:
+            print(f"DB_INIT: Schema init deferred - {e}")
+
+    def _make_connection(self):
+        """Create a fresh, direct connection to PostgreSQL."""
+        MAX_RETRIES = 5
+        last_err = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                conn = psycopg2.connect(self.db_url)
+                conn.autocommit = False
+                return conn
+            except Exception as e:
+                last_err = e
+                if attempt < MAX_RETRIES - 1:
+                    wait = 1.0 * (2 ** attempt)
+                    print(f"DB_CONNECT: Retry {attempt+1}/{MAX_RETRIES} in {wait}s - {e}")
+                    time.sleep(wait)
+        raise last_err
 
     def _get_conn(self):
+        db_ref = self  # capture reference for inner class
         class ConnWrapper:
-            def __init__(self, pool):
-                self.pool = pool
+            def __init__(self):
                 self.conn = None
             def __enter__(self):
-                import time
-                MAX_RETRIES = 5
-                last_err = None
-                for attempt in range(MAX_RETRIES):
-                    try:
-                        self.conn = self.pool.getconn()
-                        # Removed SELECT 1 ping - it's faster and more stable with pgbouncer
-                        self.conn.autocommit = False
-                        return self
-                    except Exception as e:
-                        last_err = e
-                        if self.conn:
-                            try: self.pool.putconn(self.conn, close=True)
-                            except: pass
-                            self.conn = None
-                        if attempt < MAX_RETRIES - 1:
-                            time.sleep(1.0 * (2 ** attempt))
-                
-                if last_err: raise last_err
+                self.conn = db_ref._make_connection()
                 return self
             def __exit__(self, exc_type, exc_val, exc_tb):
                 if not self.conn: return
                 if exc_type:
                     try: self.conn.rollback()
                     except: pass
-                # Clean return to pool
-                self.pool.putconn(self.conn)
+                try: self.conn.close()
+                except: pass
             def execute(self, query, params=None):
                 cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
                 query = query.replace("?", "%s")
@@ -77,7 +70,7 @@ class Database:
                 cur.execute(query)
             def commit(self):
                 self.conn.commit()
-        return ConnWrapper(self.pool)
+        return ConnWrapper()
     def _init_db(self):
         schema = """
         CREATE TABLE IF NOT EXISTS accounts (
