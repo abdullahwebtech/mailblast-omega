@@ -18,7 +18,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 class Database:
     def __init__(self, db_url: str = DATABASE_URL):
         self.db_url = db_url
-        self.pool = ThreadedConnectionPool(1, 15, dsn=self.db_url)
+        self.pool = ThreadedConnectionPool(1, 40, dsn=self.db_url)
         self._init_db()
 
     def _get_conn(self):
@@ -34,22 +34,16 @@ class Database:
                 if exc_type:
                     self.conn.rollback()
                 self.pool.putconn(self.conn)
-            def cursor(self, cursor_factory=None):
-                # Return the actual cursor from the internal connection
-                return self.conn.cursor(cursor_factory=cursor_factory or psycopg2.extras.DictCursor)
             def execute(self, query, params=None):
-                cur = self.cursor()
+                cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
                 query = query.replace("?", "%s")
                 cur.execute(query, params or ())
                 return cur
             def executescript(self, query):
-                # Postgres executescript equivalent is just execute
                 cur = self.conn.cursor()
                 cur.execute(query)
             def commit(self):
                 self.conn.commit()
-            def rollback(self):
-                self.conn.rollback()
         return ConnWrapper(self.pool)
     def _init_db(self):
         schema = """
@@ -269,8 +263,8 @@ class Database:
     # --- Send Logging ---
     def log_send(self, campaign_id, account_id, recipient, website, status, error_msg=None, tracking_id=None, row_data=None):
         import datetime as dt
-        # Reduced cooldown (2s) to allow for faster testing and better UX during deployment validation
-        cooldown = (dt.datetime.utcnow() + dt.timedelta(seconds=2)).isoformat()
+        # Restore 60-second cooldown to block instant previews and Sent folder pre-fetches
+        cooldown = (dt.datetime.utcnow() + dt.timedelta(seconds=60)).isoformat()
         with self._get_conn() as conn:
             conn.execute("""
                 INSERT INTO send_log (campaign_id, account_id, recipient, website, row_data, status, error_msg, tracking_id, sender_ignore_until)
@@ -444,11 +438,11 @@ class Database:
                         # Fallback for ISO format if stored differently
                         sent_dt = dt.datetime.fromisoformat(sent_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
                     
-                    # 2. PER-EMAIL COOLDOWN LOGIC (2 Seconds)
-                    # We ignore any hits within the first 2 seconds to block instant previews.
+                    # 2. PER-EMAIL COOLDOWN LOGIC (60 Seconds)
+                    # We ignore any hits within the first 60 seconds to block ISP scans/bots.
                     diff = (now - sent_dt).total_seconds()
                     
-                    if diff < 2:
+                    if diff < 60:
                         # Log the ignore to server console so user can see it's being "blocked" correctly
                         print(f"TRACKING: [IGNORED] Item {tracking_id} hit at {int(diff)}s (Cooldown active for 60s)")
                         return "ignored_initial_cooldown"
@@ -584,13 +578,10 @@ class Database:
                 where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '1 year'"
             
             # Count filtered sent
-            # Added explicit casting to ensure TEXT sent_at is treated as TIMESTAMP for math
             sent_query = "SELECT COUNT(*) FROM send_log " + where_clause + " AND status='sent'"
             opened_query = "SELECT COUNT(*) FROM send_log " + where_clause + " AND opened=1"
             failed_query = "SELECT COUNT(*) FROM send_log " + where_clause + " AND status='failed'"
             
-            # Since sent_at is TEXT in some schemas, we cast to timestamptz for the range filter if it contains 'INTERVAL'
-            # But here we just execute.
             total_sent = conn.execute(sent_query, params).fetchone()[0] or 0
             total_opened = conn.execute(opened_query, params).fetchone()[0] or 0
             total_failed = conn.execute(failed_query, params).fetchone()[0] or 0
