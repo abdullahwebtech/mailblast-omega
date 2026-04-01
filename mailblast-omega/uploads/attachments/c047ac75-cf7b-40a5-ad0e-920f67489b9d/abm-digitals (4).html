@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABM DIGITALS — Authority Link Building & Digital Solutions</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+#site-logo{
+height:150px;
+width:auto;
+}
+
+@media (max-width:768px){
+#site-logo{
+height:85px;
+}
+}
+[data-theme="dark"] {
+--bg:#0a0a0f; --bg-mid:#2a2a35; --text:#f5f0e8; --mute:#6b6b7a;
+--gold:#c9a84c; --gold-l:#e8c96a; --bdr:rgba(201,168,76,.2); --bdr-sm:rgba(201,168,76,.08);
+--nav-bg:rgba(10,10,15,.88); --sub:rgba(245,240,232,.65);
+--card:rgba(245,240,232,.04); --card-h:rgba(201,168,76,.04);
+--tog:#18181f; --footer:rgba(0,0,0,.5);
+}
+[data-theme="light"] {
+--bg:#f2ede4; --bg-mid:#e8e1d6; --text:#1a1a2e; --mute:#7a6e60;
+--gold:#1a6b5a; --gold-l:#22876f; --bdr:rgba(26,107,90,.22); --bdr-sm:rgba(26,107,90,.08);
+--nav-bg:rgba(242,237,228,.92); --sub:rgba(26,26,46,.62);
+--card:rgba(26,107,90,.04); --card-h:rgba(26,107,90,.07);
+--tog:#ddd7cc; --footer:#ddd7cc;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:"DM Sans",sans-serif;font-weight:300;overflow-x:hidden;transition:background .3s,color .3s}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--gold)}
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:64px;padding:3rem;display:flex;align-items:center;justify-content:space-between;background:var(--nav-bg);backdrop-filter:blur(16px);border-bottom:1px solid var(--bdr);transition:background .3s,border-color .3s}
+.nav-links{display:flex;gap:2.5rem;list-style:none}
+.nav-links a{color:var(--text);text-decoration:none;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;opacity:.6;transition:opacity .2s,color .2s}
+.nav-links a:hover,.nav-links a.active{opacity:1;color:var(--gold)}
+.nav-r{display:flex;align-items:center;gap:.8rem}
+.tog{width:48px;height:25px;background:var(--tog);border:1px solid var(--bdr);border-radius:13px;cursor:pointer;position:relative;transition:background .3s,border-color .3s;flex-shrink:0}
+.tog::before{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:var(--gold);transition:transform .35s cubic-bezier(.34,1.56,.64,1),background .3s}
+[data-theme="light"] .tog::before{transform:translateX(23px)}
+.togi{position:absolute;top:50%;transform:translateY(-50%);font-size:.52rem;pointer-events:none}
+.togi.s{left:6px}.togi.m{right:6px}
+.nav-cta{background:var(--gold);color:var(--bg);border:none;padding:.6rem 1.4rem;font-family:"DM Sans",sans-serif;font-size:.78rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background .2s,transform .15s}
+.nav-cta:hover{background:var(--gold-l);transform:translateY(-1px)}
+.hbg{display:none;flex-direction:column;justify-content:center;gap:5px;width:34px;height:34px;cursor:pointer;background:none;border:1px solid var(--bdr);padding:6px;transition:border-color .2s;flex-shrink:0}
+.hbg:hover{border-color:var(--gold)}
+.hbg span{display:block;width:100%;height:1.5px;background:var(--text);transition:all .3s}
+.hbg.open span:nth-child(1){transform:translateY(6.5px) rotate(45deg)}
+.hbg.open span:nth-child(2){opacity:0}
+.hbg.open span:nth-child(3){transform:translateY(-6.5px) rotate(-45deg)}
+.mobmenu{display:none;position:fixed;top:64px;left:0;right:0;z-index:190;background:var(--nav-bg);backdrop-filter:blur(20px);border-bottom:1px solid var(--bdr);padding:.5rem 1.5rem 1.5rem;transition:background .3s,border-color .3s}
+.mobmenu.open{display:block}
+.mobmenu ul{list-style:none}
+.mobmenu ul li a{display:block;padding:.8rem 0;font-size:.85rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--text);text-decoration:none;opacity:.7;border-bottom:1px solid var(--bdr);transition:color .2s,opacity .2s}
+.mobmenu ul li:last-child a{border-bottom:none}
+.mobmenu ul li a:hover{opacity:1;color:var(--gold)}
+.hero{min-height:100vh;display:grid;grid-template-columns:1fr 1fr;align-items:center;padding:8rem 4rem 5rem;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 60% 70% at 80% 40%,rgba(201,168,76,.06) 0%,transparent 70%),radial-gradient(ellipse 40% 50% at 10% 80%,rgba(61,90,71,.08) 0%,transparent 60%);transition:background .3s}
+[data-theme="light"] .hero::before{background:radial-gradient(ellipse 60% 70% at 80% 40%,rgba(26,107,90,.07) 0%,transparent 70%),radial-gradient(ellipse 40% 50% at 10% 80%,rgba(26,107,90,.05) 0%,transparent 60%)}
+.hero-gl{position:absolute;inset:0;opacity:.035;background-image:linear-gradient(var(--text) 1px,transparent 1px),linear-gradient(90deg,var(--text) 1px,transparent 1px);background-size:60px 60px;transition:background-image .3s}
+.eyebrow{font-size:.72rem;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:1.5rem;display:flex;align-items:center;gap:.8rem;transition:color .3s}
+.eyebrow::before{content:"";display:block;width:2rem;height:1px;background:var(--gold);transition:background .3s}
+.hero h1{font-family:"Bebas Neue",sans-serif;font-size:clamp(3.5rem,7vw,6.5rem);line-height:.95;letter-spacing:.02em;margin-bottom:1.8rem;transition:color .3s}
+.hero h1 em{font-family:"DM Serif Display",serif;font-style:italic;color:var(--gold);transition:color .3s}
+.hero-sub{font-size:1.05rem;line-height:1.75;color:var(--sub);max-width:420px;margin-bottom:2.5rem;transition:color .3s}
+.hero-actions{display:flex;gap:1rem;align-items:center}
+.btn-p{background:var(--gold);color:var(--bg);padding:.9rem 2.2rem;border:none;font-family:"DM Sans",sans-serif;font-weight:500;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.btn-p::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.15);transform:translateX(-100%);transition:transform .3s}
+.btn-p:hover::after{transform:translateX(0)}
+.btn-p:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(201,168,76,.3)}
+.btn-o{background:transparent;color:var(--text);padding:.9rem 2.2rem;border:1px solid var(--bdr);font-family:"DM Sans",sans-serif;font-weight:400;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s}
+.btn-o:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+.hero-r{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1.2rem;padding-left:3rem;position:relative}
+.stat-card{background:var(--card);border:1px solid var(--bdr);padding:1.5rem 2rem;width:100%;max-width:320px;position:relative;animation:floatCard 6s ease-in-out infinite;transition:background .3s,border-color .3s}
+.stat-card:nth-child(2){animation-delay:-2s;margin-right:2rem}
+.stat-card:nth-child(3){animation-delay:-4s;margin-right:4rem}
+@keyframes floatCard{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent);transition:background .3s}
+.stat-num{font-family:"Bebas Neue",sans-serif;font-size:2.8rem;letter-spacing:.04em;color:var(--gold);line-height:1;transition:color .3s}
+.stat-lbl{font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);margin-top:.3rem;transition:color .3s}
+.ticker{background:var(--gold);padding:.8rem 0;overflow:hidden;white-space:nowrap;transition:background .3s}
+.ticker-t{display:inline-block;animation:tick 30s linear infinite}
+.ticker-t span{font-family:"Bebas Neue",sans-serif;font-size:.95rem;letter-spacing:.2em;color:var(--bg);padding:0 2rem;transition:color .3s}
+.ticker-t span.dot{opacity:.4}
+@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+section{padding:6rem 4rem;transition:background .3s}
+.sec-lbl{font-size:.68rem;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:1rem;display:flex;align-items:center;gap:.8rem;transition:color .3s}
+.sec-lbl::before{content:"";display:block;width:1.5rem;height:1px;background:var(--gold);transition:background .3s}
+h2{font-family:"DM Serif Display",serif;font-size:clamp(2.2rem,4vw,3.2rem);line-height:1.15;font-weight:400;margin-bottom:1rem;transition:color .3s}
+h2 em{font-style:italic;color:var(--gold);transition:color .3s}
+.credibility{background:var(--bg-mid);border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:4rem;transition:background .3s,border-color .3s}
+.cred-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;margin-top:3rem}
+.cred-item{padding:2rem 1.5rem;border:1px solid var(--bdr);text-align:center;transition:background .25s,border-color .25s;cursor:default}
+.cred-item:hover{background:var(--card-h);border-color:rgba(201,168,76,.4)}
+.cred-icon{font-size:1.6rem;margin-bottom:.8rem}
+.cred-title{font-size:.8rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.4rem;transition:color .3s}
+.cred-desc{font-size:.75rem;color:var(--mute);line-height:1.6;transition:color .3s}
+.services{background:var(--bg)}
+.svc-intro{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:end;margin-bottom:4rem}
+.svc-intro-txt{font-size:1rem;line-height:1.8;color:var(--mute);max-width:380px;transition:color .3s}
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bdr);transition:background .3s}
+.svc-card{background:var(--bg);padding:2.5rem 2rem;border:1px solid var(--bdr);transition:all .3s;position:relative;overflow:hidden;cursor:default}
+.svc-card::before{content:"";position:absolute;top:0;left:-100%;width:100%;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);transition:left .4s,background .3s}
+.svc-card:hover::before{left:100%}
+.svc-card:hover{background:var(--card-h);border-color:rgba(201,168,76,.3);transform:translateY(-3px)}
+.svc-num{font-family:"Bebas Neue",sans-serif;font-size:3rem;color:var(--bdr);line-height:1;margin-bottom:1rem;transition:color .3s}
+.svc-title{font-family:"DM Serif Display",serif;font-size:1.2rem;font-weight:400;margin-bottom:.8rem;line-height:1.3;transition:color .3s}
+.svc-desc{font-size:.82rem;color:var(--mute);line-height:1.75;transition:color .3s}
+.svc-tag{display:inline-block;margin-top:1.2rem;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);border:1px solid var(--bdr);padding:.3rem .7rem;transition:color .3s,border-color .3s}
+.approach{background:var(--bg-mid);border-top:1px solid var(--bdr);transition:background .3s,border-color .3s}
+.appr-grid{display:grid;grid-template-columns:1fr 1.4fr;gap:5rem;align-items:center;margin-top:3rem}
+.appr-steps{display:flex;flex-direction:column}
+.appr-step{display:grid;grid-template-columns:3rem 1fr;gap:1.5rem;align-items:start;padding:1.8rem 0;border-bottom:1px solid var(--bdr);transition:border-color .3s;cursor:default}
+.appr-step:last-child{border-bottom:none}
+.step-n{font-family:"Bebas Neue",sans-serif;font-size:1.5rem;color:var(--gold);opacity:.5;padding-top:.1rem;transition:color .3s}
+.step-t{font-size:.88rem;font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:.4rem;transition:color .3s}
+.step-d{font-size:.8rem;color:var(--mute);line-height:1.7;transition:color .3s}
+.appr-q{background:rgba(201,168,76,.05);border:1px solid var(--bdr);border-left:3px solid var(--gold);padding:3rem;transition:background .3s,border-color .3s}
+[data-theme="light"] .appr-q{background:rgba(26,107,90,.05)}
+.q-txt{font-family:"DM Serif Display",serif;font-size:1.6rem;line-height:1.5;font-style:italic;margin-bottom:2rem;transition:color .3s}
+.q-attr{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);transition:color .3s}
+.glob{background:var(--bg)}
+.glob-box{margin-top:3rem;border:1px solid var(--bdr);padding:3rem;display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center;transition:border-color .3s}
+.glob-txt{font-size:1rem;line-height:1.8;color:var(--mute);transition:color .3s}
+.glob-list{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;list-style:none;margin-top:1.5rem}
+.glob-list li{font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:.5rem;transition:color .3s}
+.glob-list li::before{content:"→";color:var(--gold);transition:color .3s}
+.glob-vis{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.reg{background:rgba(201,168,76,.05);border:1px solid var(--bdr);padding:1.2rem 1rem;text-align:center;transition:all .2s;cursor:default}
+[data-theme="light"] .reg{background:rgba(26,107,90,.05)}
+.reg:hover{background:rgba(201,168,76,.1);border-color:rgba(201,168,76,.4)}
+[data-theme="light"] .reg:hover{background:rgba(26,107,90,.1)}
+.reg-fl{font-size:1.4rem;display:block;margin-bottom:.5rem}
+.reg-nm{font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);transition:color .3s}
+.team{background:var(--bg)}
+.team-intro p{font-size:1rem;line-height:1.8;color:var(--mute);margin-top:.7rem;max-width:560px;transition:color .3s}
+.team-feat{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:3rem;margin-bottom:1.5rem}
+.team-rest{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+.team-card{background:var(--bg);border:1px solid var(--bdr);overflow:hidden;position:relative;display:flex;flex-direction:column;transition:border-color .25s,transform .25s,box-shadow .25s;cursor:default}
+.team-card::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent);transform:scaleX(0);transform-origin:left;transition:transform .3s}
+.team-card:hover{border-color:rgba(201,168,76,.4);transform:translateY(-4px);box-shadow:0 14px 36px rgba(0,0,0,.3)}
+[data-theme="light"] .team-card:hover{box-shadow:0 14px 36px rgba(26,107,90,.12)}
+.team-card:hover::after{transform:scaleX(1)}
+.tc-photo{width:100%;overflow:hidden;flex-shrink:0;position:relative}
+.team-card.feat .tc-photo{aspect-ratio:4/3}
+.team-card:not(.feat) .tc-photo{aspect-ratio:1/1}
+.tc-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.tc-body{padding:1.5rem 1.6rem 1.6rem;flex:1;display:flex;flex-direction:column}
+.team-card.feat .tc-body{padding:1.8rem 2rem 2rem}
+.tc-badge{font-size:.57rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem;transition:color .3s}
+.tc-badge::before{content:"";width:1rem;height:1px;background:var(--gold);display:block;flex-shrink:0;transition:background .3s}
+.tc-name{font-family:"DM Serif Display",serif;font-weight:400;line-height:1.2;margin-bottom:.5rem;transition:color .3s}
+.team-card.feat .tc-name{font-size:1.5rem}
+.team-card:not(.feat) .tc-name{font-size:1.05rem}
+.tc-desc{font-size:.78rem;line-height:1.78;color:var(--mute);flex:1;margin-bottom:1rem;transition:color .3s}
+.team-card.feat .tc-desc{font-size:.85rem}
+.tc-tags{display:flex;flex-wrap:wrap;gap:.32rem;margin-bottom:1rem}
+.tc-tag{font-size:.54rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:.17rem .52rem;border:1px solid var(--bdr);color:var(--mute);transition:border-color .2s,color .2s}
+.team-card:hover .tc-tag{border-color:rgba(201,168,76,.35);color:var(--gold)}
+.tc-foot{display:flex;align-items:center;gap:.4rem;padding-top:.9rem;border-top:1px solid var(--bdr);margin-top:auto;transition:border-color .3s}
+.tc-soc{width:27px;height:27px;background:var(--card);border:1px solid var(--bdr);display:flex;align-items:center;justify-content:center;color:var(--mute);text-decoration:none;flex-shrink:0;transition:all .2s}
+.tc-soc:hover{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+.tc-soc svg{width:11px;height:11px}
+.tc-sp{flex:1}
+.tc-btn{font-size:.57rem;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);text-decoration:none;border:1px solid var(--bdr);padding:.27rem .72rem;transition:all .2s}
+.tc-btn:hover{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+.testimonials{background:var(--bg-mid);border-top:1px solid var(--bdr);transition:background .3s,border-color .3s}
+.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:3rem;background:var(--bdr);transition:background .3s}
+.testi-card{background:var(--bg-mid);padding:2.5rem 2rem;border:1px solid var(--bdr);position:relative;transition:background .3s,border-color .3s}
+.testi-card::before{content:"\201C";font-family:"DM Serif Display",serif;font-size:6rem;line-height:.6;color:var(--bdr);position:absolute;top:1.5rem;left:1.5rem;pointer-events:none;transition:color .3s}
+.testi-txt{font-size:.88rem;line-height:1.8;color:var(--mute);margin-bottom:1.5rem;padding-top:1.5rem;position:relative;z-index:1;transition:color .3s}
+.testi-nm{font-size:.78rem;font-weight:500;color:var(--gold);transition:color .3s}
+.testi-org{font-size:.7rem;color:var(--mute);margin-top:.2rem;transition:color .3s}
+.stars{color:var(--gold);font-size:.75rem;margin-bottom:.5rem;transition:color .3s}
+.contact-sec{background:var(--bg-mid);border-top:1px solid var(--bdr);transition:background .3s,border-color .3s}
+.con-layout{display:grid;grid-template-columns:1fr 1fr;gap:4rem;margin-top:3rem;align-items:start}
+.con-cards{display:flex;flex-direction:column;gap:1rem}
+.con-card{display:flex;align-items:flex-start;gap:1.2rem;padding:1.4rem;background:var(--card);border:1px solid var(--bdr);transition:all .2s}
+.con-card:hover{border-color:rgba(201,168,76,.4);background:var(--card-h)}
+.ci-ico{width:38px;height:38px;flex-shrink:0;background:rgba(201,168,76,.08);border:1px solid var(--bdr);display:flex;align-items:center;justify-content:center;font-size:.9rem;transition:background .3s,border-color .3s}
+.ci-lbl{font-size:.6rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--mute);margin-bottom:.3rem;transition:color .3s}
+.ci-val{font-size:.85rem;color:var(--text);line-height:1.5;transition:color .3s}
+.ci-val a{color:var(--gold);text-decoration:none;transition:color .2s}
+.ci-val a:hover{color:var(--gold-l);text-decoration:underline}
+.soc-head{font-family:"Bebas Neue",sans-serif;font-size:1.2rem;letter-spacing:.08em;color:var(--gold);margin-bottom:1.2rem;transition:color .3s}
+.soc-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1.5rem}
+.soc-btn{display:flex;align-items:center;gap:.8rem;padding:1rem 1.2rem;background:var(--card);border:1px solid var(--bdr);text-decoration:none;color:var(--text);font-size:.78rem;font-weight:500;transition:all .2s}
+.soc-btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+.soc-btn svg{width:18px;height:18px;flex-shrink:0}
+.soc-wa{grid-column:span 2}
+.con-cta{background:var(--gold);padding:2.5rem;position:relative;overflow:hidden;transition:background .3s}
+.con-cta::after{content:"";position:absolute;bottom:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08)}
+.con-cta h3{font-family:"Bebas Neue",sans-serif;font-size:2rem;letter-spacing:.05em;line-height:1.1;color:var(--bg);margin-bottom:.8rem;transition:color .3s}
+.con-cta p{font-size:.88rem;color:rgba(10,10,15,.72);line-height:1.7;margin-bottom:1.5rem}
+[data-theme="light"] .con-cta p{color:rgba(26,26,46,.65)}
+.btn-inv{padding:.85rem 2rem;background:var(--bg);color:var(--gold);border:none;font-family:"DM Sans",sans-serif;font-weight:500;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s}
+.btn-inv:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.cta-fin{background:var(--bg);border-top:1px solid var(--bdr);padding:7rem 4rem;text-align:center;position:relative;overflow:hidden;transition:background .3s,border-color .3s}
+.cta-fin::before{content:"ABM";font-family:"Bebas Neue",sans-serif;font-size:20vw;line-height:.8;color:var(--bdr-sm);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;pointer-events:none;user-select:none;transition:color .3s}
+.cta-fin h2{font-size:clamp(2.5rem,5vw,4rem);margin-bottom:1.2rem}
+.cta-fin p{font-size:1rem;color:var(--mute);max-width:500px;margin:0 auto 2.5rem;line-height:1.7;transition:color .3s}
+.cta-acts{display:flex;gap:1rem;justify-content:center}
+footer{background:var(--footer);border-top:1px solid var(--bdr);transition:background .3s,border-color .3s}
+.ft-top{padding:3rem 4rem;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:3rem;border-bottom:1px solid var(--bdr);transition:border-color .3s}
+.ft-tag{font-size:.76rem;color:var(--mute);line-height:1.7;max-width:230px;margin-bottom:1.4rem;margin-top:.8rem;transition:color .3s}
+.ft-soc{display:flex;gap:.5rem}
+.fsoc{width:32px;height:32px;background:var(--card);border:1px solid var(--bdr);display:flex;align-items:center;justify-content:center;color:var(--mute);text-decoration:none;transition:all .2s}
+.fsoc:hover{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+.fsoc svg{width:13px;height:13px}
+.fc h4{font-family:"Bebas Neue",sans-serif;font-size:1rem;letter-spacing:.12em;color:var(--gold);margin-bottom:1.2rem;transition:color .3s}
+.fc ul{list-style:none;display:flex;flex-direction:column;gap:.55rem}
+.fc ul li a{font-size:.76rem;color:var(--mute);text-decoration:none;transition:color .2s}
+.fc ul li a:hover{color:var(--gold)}
+.fc .fcd{font-size:.73rem;color:var(--mute);margin-bottom:.5rem;line-height:1.55;transition:color .3s}
+.fc .fcd a{color:var(--gold);text-decoration:none;transition:color .2s}
+.fc .fcd a:hover{color:var(--gold-l)}
+.ft-bot{padding:1.2rem 4rem;display:flex;justify-content:space-between;align-items:center}
+.ft-copy{font-size:.68rem;color:var(--mute);letter-spacing:.06em;transition:color .3s}
+.ft-links{display:flex;gap:1.5rem}
+.ft-links a{font-size:.68rem;color:var(--mute);text-decoration:none;transition:color .2s}
+.ft-links a:hover{color:var(--gold)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+.fade-up{opacity:0;animation:fadeUp .7s ease forwards}
+.delay-1{animation-delay:.1s}.delay-2{animation-delay:.25s}.delay-3{animation-delay:.4s}
+.rv{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease}
+.rv.in{opacity:1;transform:none}
+@media(max-width:1200px) and (min-width:901px){
+.team-rest{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:900px){
+nav{padding:0 1.5rem}
+.nav-links{display:none}
+.hbg{display:flex}
+.nav-cta{display:none}
+.hero{grid-template-columns:1fr;padding:6rem 1.5rem 3rem;gap:3rem}
+.hero-r{align-items:flex-start;padding-left:0}
+.stat-card{max-width:100%}
+section{padding:4rem 1.5rem}
+.credibility{padding:3rem 1.5rem}
+.cred-grid{grid-template-columns:1fr 1fr}
+.svc-intro{grid-template-columns:1fr;gap:1.5rem}
+.svc-grid{grid-template-columns:1fr 1fr}
+.appr-grid{grid-template-columns:1fr;gap:2rem}
+.team-feat{grid-template-columns:1fr 1fr}
+.team-rest{grid-template-columns:repeat(3,1fr);gap:1rem}
+.testi-grid{grid-template-columns:1fr}
+.glob-box{grid-template-columns:1fr;gap:2rem}
+.con-layout{grid-template-columns:1fr;gap:2rem}
+.soc-grid{grid-template-columns:1fr 1fr}
+.soc-wa{grid-column:span 2}
+.cta-acts{flex-direction:column;align-items:center}
+.ft-top{grid-template-columns:1fr 1fr;padding:2rem 1.5rem}
+.ft-bot{flex-direction:column;gap:.8rem;text-align:center;padding:1.2rem 1.5rem}
+.cta-fin{padding:4.5rem 1.5rem}
+}
+@media(max-width:600px){
+section{padding:3.5rem 1.2rem}
+.credibility{padding:3rem 1.2rem}
+.cta-fin{padding:4rem 1.2rem}
+.ft-top{grid-template-columns:1fr;padding:2rem 1.2rem;gap:1.5rem}
+.ft-bot{padding:1rem 1.2rem}
+.hero{padding:5.5rem 1.2rem 2.5rem}
+.hero h1{font-size:clamp(2.8rem,13vw,4.5rem)}
+.hero-r{flex-direction:column}
+.svc-grid{grid-template-columns:1fr}
+.team-feat{grid-template-columns:1fr}
+.team-rest{grid-template-columns:1fr 1fr;gap:.8rem}
+.team-card.feat .tc-body{padding:1.4rem 1.5rem 1.5rem}
+.team-card.feat .tc-name{font-size:1.2rem}
+.cred-grid{grid-template-columns:1fr 1fr}
+.glob-box{padding:1.5rem}
+.glob-vis{grid-template-columns:repeat(3,1fr);gap:.5rem}
+.soc-grid{grid-template-columns:1fr}
+.soc-wa{grid-column:span 1}
+.cta-acts{flex-direction:column;align-items:stretch}
+.cta-acts button{width:100%}
+h2{font-size:clamp(1.8rem,8vw,2.6rem)}
+.mobmenu{top:58px}
+.testi-grid{grid-template-columns:1fr}
+}
+@media(max-width:380px){
+.team-rest{grid-template-columns:1fr}
+.cred-grid{grid-template-columns:1fr}
+.hero h1{font-size:clamp(2.4rem,14vw,3.2rem)}
+.stat-num{font-size:2.2rem}
+}
+</style>
+</head>
+<body>
+
+<nav>
+<a href="#hero" style="display:flex;align-items:center;text-decoration:none">
+<img id="site-logo" src="https://palegoldenrod-okapi-223576.hostingersite.com/AMB%20Digital%20logo%201.webp" alt="ABM Digitals" style="width:auto;display:block;">
+</a><ul class="nav-links">
+<li><a href="#services">Services</a></li>
+<li><a href="#approach">Approach</a></li>
+<li><a href="#team">Team</a></li>
+<li><a href="#testimonials">Results</a></li>
+<li><a href="#global">Coverage</a></li>
+<li><a href="#contact">Contact</a></li>
+</ul>
+<div class="nav-r">
+<button class="tog" id="tog" aria-label="Toggle theme">
+<span class="togi s">☀</span>
+<span class="togi m">☾</span>
+</button>
+<button class="nav-cta" onclick="sc('contact')">Book Strategy Call</button>
+<button class="hbg" id="hbg" aria-label="Menu"><span></span><span></span><span></span></button>
+</div>
+</nav>
+
+<div class="mobmenu" id="mobmenu">
+<ul>
+<li><a href="#services" class="ml">Services</a></li>
+<li><a href="#approach" class="ml">Approach</a></li>
+<li><a href="#team" class="ml">Team</a></li>
+<li><a href="#testimonials" class="ml">Results</a></li>
+<li><a href="#global" class="ml">Coverage</a></li>
+<li><a href="#contact" class="ml">Contact</a></li>
+</ul>
+</div>
+
+<section class="hero" id="hero">
+<div class="hero-gl"></div>
+<div>
+<div class="eyebrow fade-up">Authority-Driven Digital Agency</div>
+<h1 class="fade-up delay-1">Build Real<br><em>Authority</em><br>& Rank Higher</h1>
+<p class="hero-sub fade-up delay-2">We help brands, agencies, and businesses grow through high-authority guest posting, strategic link building, SEO, content creation, and professional web & software development.</p>
+<div class="hero-actions fade-up delay-3">
+<button class="btn-p" onclick="sc('services')">Get Guest Post List</button>
+<button class="btn-o" onclick="sc('contact')">Book a Strategy Call</button>
+</div>
+</div>
+<div class="hero-r fade-up delay-2">
+<div class="stat-card"><div class="stat-num">5+</div><div class="stat-lbl">Years of Authority Building</div></div>
+<div class="stat-card"><div class="stat-num">500+</div><div class="stat-lbl">Publisher Relationships</div></div>
+<div class="stat-card"><div class="stat-num">100%</div><div class="stat-lbl">White Hat Methods</div></div>
+</div>
+</section>
+
+<div class="ticker">
+<div class="ticker-t">
+<span>High Authority Guest Posting</span><span class="dot"> ◆ </span>
+<span>Strategic Backlink Building</span><span class="dot"> ◆ </span>
+<span>SEO Content Writing</span><span class="dot"> ◆ </span>
+<span>DA / DR Authority Growth</span><span class="dot"> ◆ </span>
+<span>Web Development</span><span class="dot"> ◆ </span>
+<span>Custom Software</span><span class="dot"> ◆ </span>
+<span>Global Outreach Network</span><span class="dot"> ◆ </span>
+<span>High Authority Guest Posting</span><span class="dot"> ◆ </span>
+<span>Strategic Backlink Building</span><span class="dot"> ◆ </span>
+<span>SEO Content Writing</span><span class="dot"> ◆ </span>
+<span>DA / DR Authority Growth</span><span class="dot"> ◆ </span>
+<span>Web Development</span><span class="dot"> ◆ </span>
+<span>Custom Software</span><span class="dot"> ◆ </span>
+<span>Global Outreach Network</span><span class="dot"> ◆ </span>
+</div>
+</div>
+
+<section class="credibility rv">
+<div class="sec-lbl">Why Choose ABM Digitals</div>
+<h2>Authority Focused.<br><em>Strategy Driven.</em></h2>
+<div class="cred-grid">
+<div class="cred-item"><div class="cred-icon">🏆</div><div class="cred-title">High Authority Guest Posts</div><div class="cred-desc">Real traffic sites with strong DA/DR. Manual white hat placements only.</div></div>
+<div class="cred-item"><div class="cred-icon">🔗</div><div class="cred-title">Manual Link Building</div><div class="cred-desc">Structured, safe, scalable link profiles. No automated spam.</div></div>
+<div class="cred-item"><div class="cred-icon">✍️</div><div class="cred-title">SEO-Optimized Content</div><div class="cred-desc">Blogs, guest posts, product & service content crafted for rankings.</div></div>
+<div class="cred-item"><div class="cred-icon">🌍</div><div class="cred-title">Global Outreach Network</div><div class="cred-desc">All niches. All countries. Relationship-based publisher access.</div></div>
+<div class="cred-item"><div class="cred-icon">📈</div><div class="cred-title">Complete SEO Campaigns</div><div class="cred-desc">Local, on-page, off-page, and technical SEO under one roof.</div></div>
+<div class="cred-item"><div class="cred-icon">💻</div><div class="cred-title">Web Development</div><div class="cred-desc">Modern, responsive WordPress sites built for conversion and speed.</div></div>
+<div class="cred-item"><div class="cred-icon">⚙️</div><div class="cred-title">Custom Software</div><div class="cred-desc">SaaS, CRMs, automation tools — scalable and tailored to your business.</div></div>
+<div class="cred-item"><div class="cred-icon">🤝</div><div class="cred-title">Agency & Brand Partners</div><div class="cred-desc">Trusted by agencies and brands worldwide for long-term authority growth.</div></div>
+</div>
+</section>
+
+<section class="services" id="services">
+<div class="svc-intro">
+<div><div class="sec-lbl">Our Services</div><h2>Everything You Need<br>to <em>Dominate</em> Search</h2></div>
+<p class="svc-intro-txt">From high-authority guest posting and strategic backlinks to SEO, content, web development and custom software — all under one strategic roof.</p>
+</div>
+<div class="svc-grid rv">
+<div class="svc-card"><div class="svc-num">01</div><div class="svc-title">High Authority Guest Posting</div><div class="svc-desc">Real traffic placements on DA/DR-strong sites across all niches and countries. Manual outreach, genuine relationships, lasting impact.</div><span class="svc-tag">Core Service</span></div>
+<div class="svc-card"><div class="svc-num">02</div><div class="svc-title">Strategic Backlink Building</div><div class="svc-desc">Structured, safe, scalable link profiles built for long-term authority. PBN & Tier 2 strategies deployed carefully where appropriate.</div><span class="svc-tag">White Hat</span></div>
+<div class="svc-card"><div class="svc-num">03</div><div class="svc-title">SEO Content Writing</div><div class="svc-desc">Blogs, guest posts, product and service content — SEO-optimized for search engines and written for real audiences that convert.</div><span class="svc-tag">Content</span></div>
+<div class="svc-card"><div class="svc-num">04</div><div class="svc-title">Complete SEO Services</div><div class="svc-desc">Full-funnel SEO: local SEO, on-page optimization, off-page authority, and technical audits — all under one strategy.</div><span class="svc-tag">Full Funnel</span></div>
+<div class="svc-card"><div class="svc-num">05</div><div class="svc-title">DA / DR Authority Growth</div><div class="svc-desc">Strategic domain authority improvement via safe link frameworks, targeted placements, and consistent outreach campaigns.</div><span class="svc-tag">Authority</span></div>
+<div class="svc-card"><div class="svc-num">06</div><div class="svc-title">Web & WordPress Development</div><div class="svc-desc">Modern, responsive, conversion-optimized websites. Landing pages, full business sites, and ongoing maintenance support.</div><span class="svc-tag">Web Dev</span></div>
+<div class="svc-card"><div class="svc-num">07</div><div class="svc-title">Custom Software Development</div><div class="svc-desc">Web-based software, SaaS apps, CRM/ERP systems, and business automation tools built to scale with your business.</div><span class="svc-tag">Software</span></div>
+</div>
+</section>
+
+<section class="approach" id="approach">
+<div class="sec-lbl">Our Process</div>
+<h2>A Systematic Approach<br>to <em>Lasting Authority</em></h2>
+<div class="appr-grid rv">
+<div class="appr-steps">
+<div class="appr-step"><div class="step-n">01</div><div><div class="step-t">Deep Audit & Discovery</div><div class="step-d">We analyze your site, niche, competition, and current link profile to identify gaps and opportunities.</div></div></div>
+<div class="appr-step"><div class="step-n">02</div><div><div class="step-t">Custom Strategy Design</div><div class="step-d">Every campaign is tailored to your industry, target country, domain metrics, and growth goals.</div></div></div>
+<div class="appr-step"><div class="step-n">03</div><div><div class="step-t">Manual Execution</div><div class="step-d">Our outreach team secures real placements. Our content team crafts niche-relevant posts. Nothing automated.</div></div></div>
+<div class="appr-step"><div class="step-n">04</div><div><div class="step-t">Authority Growth Tracking</div><div class="step-d">We monitor DA/DR improvements, ranking shifts, and traffic impact with clear, transparent reporting.</div></div></div>
+<div class="appr-step"><div class="step-n">05</div><div><div class="step-t">Long-Term Scaling</div><div class="step-d">Authority is built over time. We scale campaigns month by month as your digital presence strengthens.</div></div></div>
+</div>
+<div class="appr-q">
+<div class="q-txt">"Long-term authority and performance — not short-term tricks. We build digital foundations that compound over time."</div>
+<div class="q-attr">— ABM Digitals Founding Philosophy</div>
+<div style="margin-top:2.5rem;padding-top:2rem;border-top:1px solid var(--bdr);transition:border-color .3s">
+<div style="font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--mute);margin-bottom:1rem;transition:color .3s">Trusted for</div>
+<div style="display:flex;gap:2rem">
+<div><div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--gold);transition:color .3s">5+</div><div style="font-size:.68rem;color:var(--mute);letter-spacing:.1em;text-transform:uppercase;transition:color .3s">Years Active</div></div>
+<div><div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--gold);transition:color .3s">All</div><div style="font-size:.68rem;color:var(--mute);letter-spacing:.1em;text-transform:uppercase;transition:color .3s">Niches Covered</div></div>
+<div><div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--gold);transition:color .3s">0%</div><div style="font-size:.68rem;color:var(--mute);letter-spacing:.1em;text-transform:uppercase;transition:color .3s">Spam or PBN Tricks</div></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="glob" id="global">
+<div class="sec-lbl">Global Reach</div>
+<h2>All Niches.<br><em>All Countries.</em></h2>
+<div class="glob-box rv">
+<div>
+<p class="glob-txt">Our outreach network spans publishers across every major country and niche. Whether you need placements in tech, finance, health, legal, e-commerce, or any vertical — we have the relationships.</p>
+<ul class="glob-list">
+<li>Technology & SaaS</li><li>Finance & Crypto</li>
+<li>Health & Wellness</li><li>Legal & Law</li>
+<li>E-commerce & Retail</li><li>Real Estate</li>
+<li>Travel & Lifestyle</li><li>Education & B2B</li>
+</ul>
+</div>
+<div class="glob-vis">
+<div class="reg"><span class="reg-fl">🇺🇸</span><span class="reg-nm">USA</span></div>
+<div class="reg"><span class="reg-fl">🇬🇧</span><span class="reg-nm">UK</span></div>
+<div class="reg"><span class="reg-fl">🇦🇺</span><span class="reg-nm">Australia</span></div>
+<div class="reg"><span class="reg-fl">🇨🇦</span><span class="reg-nm">Canada</span></div>
+<div class="reg"><span class="reg-fl">🇩🇪</span><span class="reg-nm">Germany</span></div>
+<div class="reg"><span class="reg-fl">🇦🇪</span><span class="reg-nm">UAE</span></div>
+<div class="reg"><span class="reg-fl">🇮🇳</span><span class="reg-nm">India</span></div>
+<div class="reg"><span class="reg-fl">🌐</span><span class="reg-nm">+ More</span></div>
+</div>
+</div>
+</section>
+
+<section class="team" id="team" style="border-top:1px solid var(--bdr)">
+<div class="team-intro">
+<div class="sec-lbl">Our Team</div>
+<h2>Dedicated SEO, Outreach<br>& <em>Development</em> Experts</h2>
+<p>Behind every campaign is a team of specialists who live and breathe digital authority. Meet the people driving real, measurable results for clients worldwide.</p>
+</div>
+<div class="team-feat rv">
+<div class="team-card featured">
+<div class="tc-photo">
+<img src="https://palegoldenrod-okapi-223576.hostingersite.com/anisbinmunir2.webp" alt="Anis Bin Munir">
+</div>
+<div class="tc-body">
+<div class="tc-badge">CEO & Founder</div>
+<div class="tc-name">Anis Bin Munir</div>
+<p class="tc-desc">The architect of ABM Digitals. With 5+ years building authority for global brands and agencies, Anis designs every campaign strategy from the ground up — obsessed with rankings that actually last.</p>
+<div class="tc-tags"><span class="tc-tag">SEO Strategy</span><span class="tc-tag">Authority Building</span><span class="tc-tag">Guest Posting</span><span class="tc-tag">Link Architecture</span></div>
+<div class="tc-foot"><a class="tc-soc" href="https://www.linkedin.com/in/anisbinmunir/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a><a class="tc-soc" href="https://wa.link/pqldn9" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a><span class="tc-sp"></span><a class="tc-btn" href="mailto:anisbinmunir@gmail.com">Contact</a></div>
+</div>
+</div>
+<div class="team-card featured">
+<div class="tc-photo">
+<img src="https://palegoldenrod-okapi-223576.hostingersite.com/Malik%20Abdullah%20zafar.webp" alt="Co-Founder">
+</div>
+<div class="tc-body">
+<div class="tc-badge">Co-Founder & Operations</div>
+<div class="tc-name">Abdullah Zafar</div>
+<p class="tc-desc">The engine that keeps everything running. Ensures every project is delivered on time, every client is always informed, and quality is never compromised across any campaign.</p>
+<div class="tc-tags"><span class="tc-tag">WordPress</span><span class="tc-tag">Client Relations</span><span class="tc-tag">Shopify</span><span class="tc-tag">SEO</span></div>
+<div class="tc-foot"><a class="tc-soc" href="https://www.linkedin.com/in/malik-abdullah-9029a020a/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a><a class="tc-soc" href="https://wa.link/6keeko" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a><span class="tc-sp"></span><a class="tc-btn" href="mailto:4malikabdullah@gmail.com">Contact</a></div>
+</div>
+</div>
+</div>
+<div class="team-rest rv">
+<div class="team-card">
+<div class="tc-photo">
+<img src="https://media.licdn.com/dms/image/v2/D4D03AQEXzqlVn2saHQ/profile-displayphoto-scale_400_400/B4DZt4TNw7HQAk-/0/1767249863749?e=2147483647&v=beta&t=VE1P_oT_Vi8pVIhN63wVATmX0iQ-EW80OZVV3XMOxEM" alt="Marketing Director">
+</div>
+<div class="tc-body">
+<div class="tc-badge">Senior Web Developer</div>
+<div class="tc-name">Malik Mudassar</div>
+<p class="tc-desc">Drives agency growth with sharp positioning and results-focused strategy. Connects every campaign to real business outcomes.</p>
+<div class="tc-tags"><span class="tc-tag">Ai Development</span><span class="tc-tag">Front-End</span><span class="tc-tag">Back-End</span></div>
+<div class="tc-foot"><a class="tc-soc" href="https://www.linkedin.com/in/mudassar-mern-842584250/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a><a class="tc-soc" href="https://wa.link/ee242o" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a><span class="tc-sp"></span><a class="tc-btn" href="mailto:malikmudassar6086@gmail.com">Contact</a></div>
+</div>
+</div>
+<div class="team-card">
+<div class="tc-photo">
+<img src="https://palegoldenrod-okapi-223576.hostingersite.com/Waqas%20Ali.webp" alt="Outreach Manager">
+</div>
+<div class="tc-body">
+<div class="tc-badge">Outreach Manager</div>
+<div class="tc-name">Waqas Ali</div>
+<p class="tc-desc">Manages hundreds of publisher relationships worldwide to secure the highest-quality, most relevant placements for every niche.</p>
+<div class="tc-tags"><span class="tc-tag">Publisher Relations</span><span class="tc-tag">Outreach</span><span class="tc-tag">Link Placement</span></div>
+<div class="tc-foot"><a class="tc-soc" href="https://wa.link/vvqrfj" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a><span class="tc-sp"></span><a class="tc-btn" href="mailto:waqasseo00@gmail.com">Contact</a></div>
+</div>
+</div>
+<div class="team-card">
+<div class="tc-photo">
+<img src="https://palegoldenrod-okapi-223576.hostingersite.com/Kaleem%20Don.webp" alt="Content Manager">
+</div>
+<div class="tc-body">
+<div class="tc-badge">Content Manager</div>
+<div class="tc-name">Kaleem Younas</div>
+<p class="tc-desc">Every piece of content is niche-relevant, reader-first, and search engine ready. Words that rank and convert.</p>
+<div class="tc-tags"><span class="tc-tag">SEO Content</span><span class="tc-tag">Niche Writing</span><span class="tc-tag">Editorial</span></div>
+<div class="tc-foot"><a class="tc-soc" href="https://wa.link/zm84cz" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a><span class="tc-sp"></span><a class="tc-btn" href="mailto:guestpostdepartment@gmail.com">Contact</a></div>
+</div>
+</div>
+</section>
+
+<section class="testimonials" id="testimonials">
+<div class="sec-lbl">Client Results</div>
+<h2>Long-Term Partnerships.<br><em>Real Results.</em></h2>
+<div class="testi-grid rv">
+<div class="testi-card"><div class="stars">★★★★★</div><p class="testi-txt">ABM Digitals transformed our link profile over 6 months. Our domain authority went from 18 to 41 and organic traffic doubled. They're the only agency we trust for guest posts.</p><div class="testi-nm">Alex R.</div><div class="testi-org">SaaS Startup, United Kingdom</div></div>
+<div class="testi-card"><div class="stars">★★★★★</div><p class="testi-txt">We've worked with several link building agencies. ABM is different — they actually understand niche relevance and deliver placements that move rankings, not just vanity metrics.</p><div class="testi-nm">Maria C.</div><div class="testi-org">Digital Marketing Agency, USA</div></div>
+<div class="testi-card"><div class="stars">★★★★★</div><p class="testi-txt">Excellent web development team alongside their SEO work. They built our landing page, integrated it with our content strategy, and we saw conversions increase by 40% in 3 months.</p><div class="testi-nm">Yusuf A.</div><div class="testi-org">E-commerce Brand, UAE</div></div>
+</div>
+</section>
+
+<section class="contact-sec" id="contact">
+<div class="sec-lbl">Get In Touch</div>
+<h2>Let's Build Your<br><em>Digital Authority</em></h2>
+<div class="con-layout rv">
+<div class="con-cards">
+<div class="con-card"><div class="ci-ico">📍</div><div><div class="ci-lbl">Office Address</div><div class="ci-val">Flat No. 304, Sharjah Main City<br>Sharjah 32223, United Arab Emirates</div></div></div>
+<div class="con-card"><div class="ci-ico">💬</div><div><div class="ci-lbl">WhatsApp</div><div class="ci-val"><a href="https://wa.link/pqldn9" target="_blank" rel="noopener">Chat on WhatsApp →</a></div></div></div>
+<div class="con-card"><div class="ci-ico">✉️</div><div><div class="ci-lbl">Email</div><div class="ci-val"><a href="mailto:anisbinmunir@gmail.com">anisbinmunir@gmail.com</a></div></div></div>
+<div class="con-card"><div class="ci-ico">🕒</div><div><div class="ci-lbl">Working Hours</div><div class="ci-val">Mon–Sat · 9:00 AM – 7:00 PM GST</div></div></div>
+</div>
+<div>
+<div class="soc-head">Connect With Us</div>
+<div class="soc-grid">
+<a class="soc-btn" href="https://www.linkedin.com/in/anisbinmunir/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> LinkedIn</a>
+<a class="soc-btn" href="https://www.facebook.com/anis.bin.munir" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg> Facebook</a>
+<a class="soc-btn" href="https://www.instagram.com/anisbinmunir/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg> Instagram</a>
+<a class="soc-btn soc-wa" href="https://wa.link/pqldn9" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Message on WhatsApp</a>
+</div>
+<div class="con-cta">
+<h3>Ready to Build Real Authority?</h3>
+<p>Tell us your niche, country, and goals. We'll design a custom strategy tailored to your exact requirements — no templates, no guesswork.</p>
+<button class="btn-inv" onclick="window.location.href='mailto:anisbinmunir@gmail.com'">Send Us an Email</button>
+</div>
+</div>
+</div>
+</section>
+
+<section class="cta-fin">
+<div class="sec-lbl" style="justify-content:center">Get Started</div>
+<h2>Ready to Build Real<br><em>Authority?</em></h2>
+<p>Let's create a custom strategy tailored to your niche, country, and digital requirements. No shortcuts. No spam. Just strategic authority and tech-driven growth.</p>
+<div class="cta-acts">
+<button class="btn-p" onclick="sc('contact')">Get Guest Post List</button>
+<button class="btn-o" onclick="sc('contact')">Book a Strategy Call</button>
+</div>
+</section>
+
+<footer>
+<div class="ft-top">
+<div>
+<img src="" alt="ABM Digitals" style="height:34px;width:auto;display:block;">
+<p class="ft-tag">Authority Link Building, SEO & Web Development Agency. Long-term authority — not short-term tricks.</p>
+<div class="ft-soc"><a class="fsoc" href="https://www.linkedin.com/in/anisbinmunir/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a><a class="fsoc" href="https://www.facebook.com/anis.bin.munir" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a><a class="fsoc" href="https://www.instagram.com/anisbinmunir/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a><a class="fsoc" href="https://wa.link/pqldn9" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a></div>
+</div>
+<div class="fc">
+<h4>Services</h4>
+<ul>
+<li><a href="#services">Guest Posting</a></li>
+<li><a href="#services">Backlink Building</a></li>
+<li><a href="#services">SEO Content</a></li>
+<li><a href="#services">Complete SEO</a></li>
+<li><a href="#services">Web Development</a></li>
+<li><a href="#services">Custom Software</a></li>
+</ul>
+</div>
+<div class="fc">
+<h4>Company</h4>
+<ul>
+<li><a href="#approach">Our Approach</a></li>
+<li><a href="#team">Our Team</a></li>
+<li><a href="#testimonials">Results</a></li>
+<li><a href="#global">Coverage</a></li>
+<li><a href="#contact">Contact</a></li>
+</ul>
+</div>
+<div class="fc">
+<h4>Contact</h4>
+<div class="fcd">📍 Flat 304, Sharjah Main City<br>Sharjah 32223, UAE</div>
+<div class="fcd">✉️ <a href="mailto:anisbinmunir@gmail.com">anisbinmunir@gmail.com</a></div>
+<div class="fcd">💬 <a href="https://wa.link/pqldn9" target="_blank" rel="noopener">WhatsApp</a></div>
+</div>
+</div>
+<div class="ft-bot">
+<div class="ft-copy">© 2025 ABM Digitals. All rights reserved. Authority Link Building & Digital Solutions Agency.</div>
+<div class="ft-links">
+<a href="#hero">Back to Top ↑</a>
+<a href="#services">Services</a>
+<a href="#contact">Contact</a>
+</div>
+</div>
+</footer>
+
+<script>
+function sc(id){document.getElementById(id).scrollIntoView({behavior:'smooth'})}
+var LOGO_DARK='https://palegoldenrod-okapi-223576.hostingersite.com/AMB%20Digital%20logo%201.webp';
+var LOGO_LIGHT='https://palegoldenrod-okapi-223576.hostingersite.com/ABM%20Light%20Logo.webp';
+const tog=document.getElementById('tog'),html=document.documentElement;
+html.setAttribute('data-theme',localStorage.getItem('abm-th')||'dark');
+document.addEventListener('DOMContentLoaded',function(){var t=html.getAttribute('data-theme');var sl=document.getElementById('site-logo');if(sl&&t==='light'){sl.src=LOGO_LIGHT;}});
+tog.addEventListener('click',()=>{
+const n=html.getAttribute('data-theme')==='dark'?'light':'dark';
+html.setAttribute('data-theme',n);localStorage.setItem('abm-th',n);
+var sl=document.getElementById('site-logo');if(sl){sl.src=n==='light'?LOGO_LIGHT:LOGO_DARK;}
+});
+const hbg=document.getElementById('hbg'),mob=document.getElementById('mobmenu');
+hbg.addEventListener('click',()=>{hbg.classList.toggle('open');mob.classList.toggle('open');});
+document.querySelectorAll('.ml').forEach(a=>{
+a.addEventListener('click',e=>{
+e.preventDefault();
+hbg.classList.remove('open');mob.classList.remove('open');
+const t=document.querySelector(a.getAttribute('href'));
+if(t) setTimeout(()=>t.scrollIntoView({behavior:'smooth'}),60);
+});
+});
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+if(!a.classList.contains('ml')) a.addEventListener('click',e=>{
+const t=document.querySelector(a.getAttribute('href'));
+if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'})}
+});
+});
+const secs=document.querySelectorAll('section[id]'),nls=document.querySelectorAll('.nav-links a');
+window.addEventListener('scroll',()=>{
+let cur='';
+secs.forEach(s=>{if(window.scrollY>=s.offsetTop-80)cur=s.id});
+nls.forEach(l=>{l.classList.remove('active');if(l.getAttribute('href')==='#'+cur)l.classList.add('active');});
+},{passive:true});
+const rvs=document.querySelectorAll('.rv');
+new IntersectionObserver(entries=>{
+entries.forEach(e=>{
+if(e.isIntersecting){
+e.target.classList.add('in');
+Array.from(e.target.children).forEach((c,i)=>{
+c.style.opacity='0';c.style.transform='translateY(20px)';
+c.style.transition='opacity .55s ease,transform .55s ease';
+setTimeout(()=>{c.style.opacity='1';c.style.transform='none';},60+i*55);
+});
+}
+});
+},{threshold:.07}).observe && rvs.forEach(el=>new IntersectionObserver(entries=>{
+entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');Array.from(e.target.children).forEach((c,i)=>{c.style.opacity='0';c.style.transform='translateY(20px)';c.style.transition='opacity .55s ease,transform .55s ease';setTimeout(()=>{c.style.opacity='1';c.style.transform='none';},60+i*55);});}});},{threshold:.07}).observe(el));
+</script>
+</body>
+</html>
