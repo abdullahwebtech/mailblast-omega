@@ -28,19 +28,34 @@ scheduler_engine = None
 async def root_health():
     return {"status": "healthy", "engine": "MailBlast OMEGA", "version": "1.0.3"}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://mailblast-omega-khaki.vercel.app",
-        "https://mailblast-omega-omega.vercel.app",
-        "https://mailblast-omega.vercel.app",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+class DynamicCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.method == "OPTIONS":
+            response = Response()
+            origin = request.headers.get("Origin")
+            if origin:
+                # Dynamically allow localhost and any vercel subdomain
+                if "localhost" in origin or origin.endswith(".vercel.app"):
+                    response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-User-Id, X-Requested-With"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Max-Age"] = "86400"
+            return response
+            
+        response = await call_next(request)
+        origin = request.headers.get("Origin")
+        if origin:
+            if "localhost" in origin or origin.endswith(".vercel.app"):
+                response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+
+app.add_middleware(DynamicCORSMiddleware)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -266,18 +281,20 @@ class CampaignRunner(threading.Thread):
                     conn.commit()
 
                 # 4. Dispatch with EXACT pacing
+                for item in items:
                     # Re-check status before every single email dispatch for instant pause response
                     with self.db._get_conn() as conn:
                         status_row = conn.execute("SELECT status FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
                         
                     if not status_row or dict(status_row)['status'] != 'running':
-                            # Re-queue remaining items in this batch
-                            rem_idx = items.index(item)
-                            rem_ids = [str(i['id']) for i in items[rem_idx:]]
+                        # Re-queue remaining items in this batch
+                        rem_idx = items.index(item)
+                        rem_ids = [str(i['id']) for i in items[rem_idx:]]
+                        with self.db._get_conn() as conn:
                             conn.execute(f"UPDATE send_log SET status = 'queued' WHERE id IN ({','.join(rem_ids)})")
                             conn.commit()
-                            self.is_running = False
-                            return
+                        self.is_running = False
+                        return
 
                     # Offload SMTP network latency to the executor pool
                     self.executor.submit(self._dispatch_single, item, camp, self.db)
@@ -350,6 +367,11 @@ class CampaignRunner(threading.Thread):
             with db._get_conn() as conn:
                 conn.execute("UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?", (item['id'],))
                 conn.commit()
+
+            # DEBUG: Show tracking URL for monitoring
+            domain = os.getenv("TRACKING_DOMAIN", "https://mailblast-omega.onrender.com").rstrip('/')
+            print(f"DEBUG: Sent to {recipient} | Tracking URL: {domain}/api/t/o/{item['tracking_id']}.gif")
+            
             sync_broadcast({"type": "sent", "campaign_id": campaign['id'], "recipient": recipient, "status": "sent"})
 
             if sent_via_cache:
