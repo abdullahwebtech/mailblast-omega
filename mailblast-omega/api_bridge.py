@@ -19,8 +19,14 @@ load_dotenv()
 # Queue worker is started on app startup (see startup_event)
 
 from core.scheduler_engine import SchedulerEngine
-app = FastAPI(title="MailBlast OMEGA API", version="1.0.0")
-scheduler_engine = SchedulerEngine()
+app = FastAPI(title="MailBlast OMEGA API", version="1.0.3")
+
+# Pre-initialize scheduler globally but lazily
+scheduler_engine = None
+
+@app.get("/")
+async def root_health():
+    return {"status": "healthy", "engine": "MailBlast OMEGA", "version": "1.0.3"}
 
 app.add_middleware(
     CORSMiddleware,
