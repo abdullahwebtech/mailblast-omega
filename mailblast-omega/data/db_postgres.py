@@ -18,7 +18,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 class Database:
     def __init__(self, db_url: str = DATABASE_URL):
         self.db_url = db_url
-        self.pool = ThreadedConnectionPool(1, 40, dsn=self.db_url)
+        self.pool = ThreadedConnectionPool(1, 80, dsn=self.db_url)
         self._init_db()
 
     def _get_conn(self):
@@ -27,12 +27,28 @@ class Database:
                 self.pool = pool
                 self.conn = None
             def __enter__(self):
-                self.conn = self.pool.getconn()
-                self.conn.autocommit = False
+                # Robust connection acquisition with validation
+                MAX_RETRIES = 3
+                for attempt in range(MAX_RETRIES):
+                    try:
+                        self.conn = self.pool.getconn()
+                        # Ping the connection to ensure it's still alive
+                        with self.conn.cursor() as tmp_cur:
+                            tmp_cur.execute("SELECT 1")
+                        self.conn.autocommit = False
+                        return self
+                    except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                        if self.conn:
+                            try: self.pool.putconn(self.conn, close=True)
+                            except: pass
+                        if attempt == MAX_RETRIES - 1:
+                            raise e
                 return self
             def __exit__(self, exc_type, exc_val, exc_tb):
                 if exc_type:
-                    self.conn.rollback()
+                    try: self.conn.rollback()
+                    except: pass
+                # Return to pool. If it failed during execution, it might be dead, but putconn usually handles it.
                 self.pool.putconn(self.conn)
             def execute(self, query, params=None):
                 cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
