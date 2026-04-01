@@ -218,12 +218,13 @@ class CampaignRunner(threading.Thread):
                 with self.db._get_conn() as conn:
                     camp = conn.execute("SELECT * FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
                 
-                if not camp or camp['status'] not in ('running',):
+                if not camp or dict(camp)['status'] not in ('running',):
                     print(f"WORKER: Campaign #{self.campaign_id} no longer running. Stopping runner.")
                     self.is_running = False
                     break
 
-                delay_seconds = float(camp.get('delay_seconds') or 0.1)
+                camp_dict = dict(camp)
+                delay_seconds = float(camp_dict.get('delay_seconds') or 0.1)
                 
                 # 2. Pick a BATCH of queued items
                 with self.db._get_conn() as conn:
@@ -244,7 +245,7 @@ class CampaignRunner(threading.Thread):
                             (self.campaign_id,)
                         ).fetchone()
                         if pending['count'] == 0:
-                            self.db.update_campaign_progress(self.campaign_id, camp['total'], "completed")
+                            self.db.update_campaign_progress(self.campaign_id, camp_dict.get('total', 0), "completed")
                             sync_broadcast({"type": "status", "campaign_id": self.campaign_id, "status": "completed"})
                             self.is_running = False
                             break
