@@ -1482,5 +1482,7 @@ async def api_delete_all_active(category: str):
     return {"status": "success"} if success else {"status": "error"}
 
 if __name__ == "__main__":
+    # Use environment PORT for Render/Vercel compatibility, fallback to 8000 locally
+    port = int(os.getenv("PORT", 8000))
     # Disable reload in production to save CPU
-    uvicorn.run("api_bridge:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("api_bridge:app", host="0.0.0.0", port=port, reload=False)

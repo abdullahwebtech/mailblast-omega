@@ -18,8 +18,15 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 class Database:
     def __init__(self, db_url: str = DATABASE_URL):
         self.db_url = db_url
+        if "sslmode=" not in self.db_url:
+            separator = "&" if "?" in self.db_url else "?"
+            self.db_url += f"{separator}sslmode=require"
+            
         self.pool = ThreadedConnectionPool(1, 80, dsn=self.db_url)
-        self._init_db()
+        try:
+            self._init_db()
+        except:
+            print("DB_BOOTSTRAP: Initial schema check failed, will retry on-demand.")
 
     def _get_conn(self):
         class ConnWrapper:
@@ -27,28 +34,33 @@ class Database:
                 self.pool = pool
                 self.conn = None
             def __enter__(self):
-                # Robust connection acquisition with validation
-                MAX_RETRIES = 3
+                import time
+                MAX_RETRIES = 5
+                last_err = None
                 for attempt in range(MAX_RETRIES):
                     try:
                         self.conn = self.pool.getconn()
-                        # Ping the connection to ensure it's still alive
+                        # Ping and setup
                         with self.conn.cursor() as tmp_cur:
                             tmp_cur.execute("SELECT 1")
                         self.conn.autocommit = False
                         return self
                     except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                        last_err = e
                         if self.conn:
                             try: self.pool.putconn(self.conn, close=True)
                             except: pass
-                        if attempt == MAX_RETRIES - 1:
-                            raise e
+                            self.conn = None
+                        # Exponential backoff: 0.5s, 1s, 2s, 4s
+                        time.sleep(0.5 * (2 ** attempt))
+                
+                if last_err: raise last_err
                 return self
             def __exit__(self, exc_type, exc_val, exc_tb):
+                if not self.conn: return
                 if exc_type:
                     try: self.conn.rollback()
                     except: pass
-                # Return to pool. If it failed during execution, it might be dead, but putconn usually handles it.
                 self.pool.putconn(self.conn)
             def execute(self, query, params=None):
                 cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
