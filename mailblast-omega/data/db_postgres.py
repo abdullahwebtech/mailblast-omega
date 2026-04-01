@@ -34,16 +34,22 @@ class Database:
                 if exc_type:
                     self.conn.rollback()
                 self.pool.putconn(self.conn)
+            def cursor(self, cursor_factory=None):
+                # Return the actual cursor from the internal connection
+                return self.conn.cursor(cursor_factory=cursor_factory or psycopg2.extras.DictCursor)
             def execute(self, query, params=None):
-                cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+                cur = self.cursor()
                 query = query.replace("?", "%s")
                 cur.execute(query, params or ())
                 return cur
             def executescript(self, query):
+                # Postgres executescript equivalent is just execute
                 cur = self.conn.cursor()
                 cur.execute(query)
             def commit(self):
                 self.conn.commit()
+            def rollback(self):
+                self.conn.rollback()
         return ConnWrapper(self.pool)
     def _init_db(self):
         schema = """
@@ -567,21 +573,24 @@ class Database:
                 params.append(account_id)
                 
             if time_range == 'today': # Rolling 24h
-                where_clause += "AND sent_at >= NOW() - INTERVAL '1 day'"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '1 day'"
             elif time_range == 'yesterday':
-                where_clause += "AND sent_at >= NOW() - INTERVAL '2 days' AND sent_at < NOW() - INTERVAL '1 day'"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '2 days' AND sent_at::timestamp < NOW() - INTERVAL '1 day'"
             elif time_range == '7d':
-                where_clause += "AND sent_at >= NOW() - INTERVAL '7 days'"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '7 days'"
             elif time_range == '30d':
-                where_clause += "AND sent_at >= NOW() - INTERVAL '30 days'"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '30 days'"
             elif time_range == '1y':
-                where_clause += "AND sent_at >= NOW() - INTERVAL '1 year'"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '1 year'"
             
             # Count filtered sent
+            # Added explicit casting to ensure TEXT sent_at is treated as TIMESTAMP for math
             sent_query = "SELECT COUNT(*) FROM send_log " + where_clause + " AND status='sent'"
             opened_query = "SELECT COUNT(*) FROM send_log " + where_clause + " AND opened=1"
             failed_query = "SELECT COUNT(*) FROM send_log " + where_clause + " AND status='failed'"
             
+            # Since sent_at is TEXT in some schemas, we cast to timestamptz for the range filter if it contains 'INTERVAL'
+            # But here we just execute.
             total_sent = conn.execute(sent_query, params).fetchone()[0] or 0
             total_opened = conn.execute(opened_query, params).fetchone()[0] or 0
             total_failed = conn.execute(failed_query, params).fetchone()[0] or 0
@@ -605,17 +614,17 @@ class Database:
             params = []
             
             if time_range == 'today': # Hourly for last 24h
-                group_by = "date_trunc('hour', sent_at)"
-                where_clause += "AND sent_at >= NOW() - INTERVAL '1 day' "
+                group_by = "date_trunc('hour', sent_at::timestamp)"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '1 day' "
             elif time_range == '7d':
-                group_by = "DATE(sent_at)"
-                where_clause += "AND sent_at >= NOW() - INTERVAL '7 days' "
+                group_by = "DATE(sent_at::timestamp)"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '7 days' "
             elif time_range == '30d':
-                group_by = "DATE(sent_at)"
-                where_clause += "AND sent_at >= NOW() - INTERVAL '30 days' "
+                group_by = "DATE(sent_at::timestamp)"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '30 days' "
             elif time_range == '1y':
-                group_by = "date_trunc('month', sent_at)"
-                where_clause += "AND sent_at >= NOW() - INTERVAL '1 year' "
+                group_by = "date_trunc('month', sent_at::timestamp)"
+                where_clause += "AND sent_at::timestamp >= NOW() - INTERVAL '1 year' "
             elif time_range == 'forever':
                 where_clause += "AND status='sent' "
 
