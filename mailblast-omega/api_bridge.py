@@ -229,13 +229,15 @@ class CampaignRunner(threading.Thread):
                 # 2. Pick a BATCH of queued items
                 with self.db._get_conn() as conn:
                     now_str = datetime.now(timezone.utc).isoformat()
-                    items = conn.execute("""
+                    cur = conn.cursor()
+                    cur.execute("""
                         SELECT * FROM send_log
                         WHERE campaign_id = ?
                         AND (status = 'queued' OR (status = 'retrying' AND next_retry_at <= ?))
                         ORDER BY status='retrying' DESC, id ASC
                         LIMIT 100
-                    """, (self.campaign_id, now_str)).fetchall()
+                    """, (self.campaign_id, now_str))
+                    items = cur.fetchall()
 
                 if not items:
                     # Check if actually complete
@@ -258,25 +260,28 @@ class CampaignRunner(threading.Thread):
                 # 3. Lock batch to 'processing'
                 item_ids = [str(item['id']) for item in items]
                 with self.db._get_conn() as conn:
-                    conn.execute(f"UPDATE send_log SET status = 'processing' WHERE id IN ({','.join(item_ids)})")
+                    cur = conn.cursor()
+                    cur.execute(f"UPDATE send_log SET status = 'processing' WHERE id IN ({','.join(item_ids)})")
                     conn.commit()
 
                 # 4. Dispatch with EXACT pacing
                 for item in items:
                     # Re-check status before every single email dispatch for instant pause response
                     with self.db._get_conn() as conn:
-                        status_row = conn.execute("SELECT status FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
-                        if not status_row or status_row['status'] != 'running':
+                        cur = conn.cursor()
+                        cur.execute("SELECT status FROM campaigns WHERE id = ?", (self.campaign_id,))
+                        status_row = cur.fetchone()
+                        if not status_row or dict(status_row)['status'] != 'running':
                             # Re-queue remaining items in this batch
                             rem_idx = items.index(item)
                             rem_ids = [str(i['id']) for i in items[rem_idx:]]
-                            conn.execute(f"UPDATE send_log SET status = 'queued' WHERE id IN ({','.join(rem_ids)})")
+                            cur.execute(f"UPDATE send_log SET status = 'queued' WHERE id IN ({','.join(rem_ids)})")
                             conn.commit()
                             self.is_running = False
                             return
 
                     # Offload SMTP network latency to the executor pool
-                    self.executor.submit(self._dispatch_single, item, camp, self.db)
+                    self.executor.submit(self._dispatch_single, item, camp_dict, self.db)
 
                     # Pacing Sleep (Rigidly accurate)
                     time.sleep(delay_seconds)
@@ -286,15 +291,19 @@ class CampaignRunner(threading.Thread):
                 time.sleep(5)
 
     def _dispatch_single(self, item, campaign, db):
+        campaign = dict(campaign)
         # ... logic as before ...
         import json, re, threading as _threading
         account_id = item['account_id']
         try:
             with db._get_conn() as conn:
-                acc = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+                cur = conn.cursor()
+                cur.execute("SELECT * FROM accounts WHERE id = ?", (account_id,))
+                acc = cur.fetchone()
             if not acc:
                 with db._get_conn() as conn:
-                    conn.execute("UPDATE send_log SET status = 'failed', error_msg = 'Account not found' WHERE id = ?", (item['id'],))
+                    cur = conn.cursor()
+                    cur.execute("UPDATE send_log SET status = 'failed', error_msg = 'Account not found' WHERE id = ?", (item['id'],))
                     conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "failed"})
                 return
@@ -303,7 +312,8 @@ class CampaignRunner(threading.Thread):
             recipient = item['recipient'].strip()
             if not recipient or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', recipient):
                 with db._get_conn() as conn:
-                    conn.execute("UPDATE send_log SET status = 'failed', error_msg = ? WHERE id = ?", (f"Invalid email: {recipient}", item['id']))
+                    cur = conn.cursor()
+                    cur.execute("UPDATE send_log SET status = 'failed', error_msg = ? WHERE id = ?", (f"Invalid email: {recipient}", item['id']))
                     conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": recipient, "status": "failed"})
                 return
@@ -344,8 +354,10 @@ class CampaignRunner(threading.Thread):
                     sent_via_cache = False
 
             with db._get_conn() as conn:
-                conn.execute("UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?", (item['id'],))
+                cur = conn.cursor()
+                cur.execute("UPDATE send_log SET status = 'sent', error_msg = '250 OK', sent_at = CURRENT_TIMESTAMP WHERE id = ?", (item['id'],))
                 conn.commit()
+                print(f"DEBUG: Successfully updated DB status to SENT for {recipient}")
             sync_broadcast({"type": "sent", "campaign_id": campaign['id'], "recipient": recipient, "status": "sent"})
 
             if sent_via_cache:
