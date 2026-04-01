@@ -22,11 +22,14 @@ class Database:
             separator = "&" if "?" in self.db_url else "?"
             self.db_url += f"{separator}sslmode=require"
             
-        self.pool = ThreadedConnectionPool(1, 80, dsn=self.db_url)
+        # minconn=0 allows the pool to start without an immediate connection (Lazy Loading)
+        # This prevents the whole server from crashing if Supabase has a momentary issue on boot.
+        self.pool = ThreadedConnectionPool(0, 80, dsn=self.db_url)
         try:
+            # Only try to init if we can actually get a connection quickly
             self._init_db()
-        except:
-            print("DB_BOOTSTRAP: Initial schema check failed, will retry on-demand.")
+        except Exception as e:
+            print(f"DB_BOOTSTRAP: Warning - Initial schema check deferred: {e}")
 
     def _get_conn(self):
         class ConnWrapper:
@@ -40,19 +43,20 @@ class Database:
                 for attempt in range(MAX_RETRIES):
                     try:
                         self.conn = self.pool.getconn()
-                        # Ping and setup
+                        # Verify health before returning
                         with self.conn.cursor() as tmp_cur:
                             tmp_cur.execute("SELECT 1")
                         self.conn.autocommit = False
                         return self
-                    except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                    except Exception as e:
                         last_err = e
                         if self.conn:
                             try: self.pool.putconn(self.conn, close=True)
                             except: pass
                             self.conn = None
-                        # Exponential backoff: 0.5s, 1s, 2s, 4s
-                        time.sleep(0.5 * (2 ** attempt))
+                        if attempt < MAX_RETRIES - 1:
+                            # Increasing wait time: 1s, 2s, 4s, 8s
+                            time.sleep(1.0 * (2 ** attempt))
                 
                 if last_err: raise last_err
                 return self
@@ -61,6 +65,7 @@ class Database:
                 if exc_type:
                     try: self.conn.rollback()
                     except: pass
+                # Return the connection back to the pool cleanly
                 self.pool.putconn(self.conn)
             def execute(self, query, params=None):
                 cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -913,12 +918,16 @@ class Database:
             conn.commit()
 
 # Global Database Instance functions (used extensively by the FastAPI bridge and GUI apps)
+import threading
 _db_instance = None
+_db_lock = threading.Lock()
 
 def get_db() -> Database:
     global _db_instance
     if _db_instance is None:
-        _db_instance = Database()
+        with _db_lock:
+            if _db_instance is None:
+                _db_instance = Database()
     return _db_instance
 
 def get_all_campaigns(limit: int = 15, offset: int = 0):
