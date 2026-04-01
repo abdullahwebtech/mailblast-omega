@@ -1,6 +1,7 @@
 services:
   - type: web
     name: mailblast-omega
+    plan: free
     env: python
     buildCommand: "pip install -r requirements.txt && chmod +x start.sh"
     startCommand: "./start.sh"
