@@ -214,12 +214,16 @@ class CampaignRunner(threading.Thread):
         print(f"WORKER: Starting parallel runner for Campaign #{self.campaign_id}")
         while self.is_running:
             try:
-                # 1. Fetch current campaign metadata
-                # We fetch fresh every batch to see if status changed to paused/cancelled
                 with self.db._get_conn() as conn:
-                    camp = conn.execute("SELECT * FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
+                    row = conn.execute("SELECT * FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
                 
-                if not camp or camp['status'] not in ('running',):
+                if not row:
+                    print(f"WORKER: Campaign #{self.campaign_id} not found. Stopping runner.")
+                    self.is_running = False
+                    break
+                
+                camp = dict(row)
+                if camp['status'] not in ('running',):
                     print(f"WORKER: Campaign #{self.campaign_id} no longer running. Stopping runner.")
                     self.is_running = False
                     break
@@ -262,11 +266,11 @@ class CampaignRunner(threading.Thread):
                     conn.commit()
 
                 # 4. Dispatch with EXACT pacing
-                for item in items:
                     # Re-check status before every single email dispatch for instant pause response
                     with self.db._get_conn() as conn:
                         status_row = conn.execute("SELECT status FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
-                        if not status_row or status_row['status'] != 'running':
+                        
+                    if not status_row or dict(status_row)['status'] != 'running':
                             # Re-queue remaining items in this batch
                             rem_idx = items.index(item)
                             rem_ids = [str(i['id']) for i in items[rem_idx:]]
@@ -291,15 +295,15 @@ class CampaignRunner(threading.Thread):
         account_id = item['account_id']
         try:
             with db._get_conn() as conn:
-                acc = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
-            if not acc:
+                row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            if not row:
                 with db._get_conn() as conn:
                     conn.execute("UPDATE send_log SET status = 'failed', error_msg = 'Account not found' WHERE id = ?", (item['id'],))
                     conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "failed"})
                 return
 
-            acc_dict = dict(acc)
+            acc_dict = dict(row)
             recipient = item['recipient'].strip()
             if not recipient or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', recipient):
                 with db._get_conn() as conn:
