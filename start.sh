@@ -5,4 +5,5 @@
 echo "Starting MailBlast OMEGA Bridge API (Embedded Worker Engine)..."
 # If PORT is unmapped by Render, default to 8000
 export PORT=${PORT:-8000}
+cd mailblast-omega
 uvicorn api_bridge:app --host 0.0.0.0 --port $PORT --workers 1
