@@ -490,11 +490,17 @@ class Database:
                         sent_dt = sent_at_raw.replace(tzinfo=None)  # Strip timezone for comparison
                     elif isinstance(sent_at_raw, str):
                         try:
-                            sent_dt = dt.datetime.strptime(sent_at_raw, "%Y-%m-%d %H:%M:%S")
-                        except ValueError:
-                            sent_dt = dt.datetime.fromisoformat(sent_at_raw.replace('Z', '+00:00')).replace(tzinfo=None)
+                            # Strip micro-seconds and timezone if present for clean 19-char parse
+                            clean_date = sent_at_raw.split('.')[0].split('+')[0].strip()
+                            if 'T' in clean_date:
+                                sent_dt = dt.datetime.strptime(clean_date, "%Y-%m-%dT%H:%M:%S")
+                            else:
+                                sent_dt = dt.datetime.strptime(clean_date, "%Y-%m-%d %H:%M:%S")
+                        except Exception:
+                            # Final fallback: current time (disables cooldown, but prevents crash)
+                            sent_dt = now
                     else:
-                        sent_dt = now  # Safe fallback
+                        sent_dt = now  # Final safe fallback
                     
                     # 2. PER-EMAIL COOLDOWN LOGIC (60 Seconds)
                     diff = (now - sent_dt).total_seconds()
