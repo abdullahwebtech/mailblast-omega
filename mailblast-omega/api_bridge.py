@@ -209,6 +209,16 @@ class CampaignRunner(threading.Thread):
 
     def run(self):
         print(f"WORKER: Starting parallel runner for Campaign #{self.campaign_id}")
+        
+        # Reset any stuck 'processing' items for this campaign back to 'queued' on startup
+        try:
+            with self.db._get_conn() as conn:
+                conn.execute("UPDATE send_log SET status = 'queued' WHERE campaign_id = ? AND status = 'processing'", (self.campaign_id,))
+                conn.commit()
+                print(f"WORKER: Reset stuck processing items for Campaign #{self.campaign_id}")
+        except Exception as e:
+            print(f"WORKER ERROR: Failed to reset stuck items for #{self.campaign_id}: {e}")
+
         while self.is_running:
             try:
                 with self.db._get_conn() as conn:
