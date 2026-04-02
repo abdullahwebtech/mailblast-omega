@@ -469,20 +469,41 @@ async def upload_attachments(files: list[UploadFile] = File(...)):
     import os
     from pathlib import Path
     
-    batch_id = str(uuid.uuid4())
-    upload_dir = Path("uploads/attachments") / batch_id
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    
-    saved_files = []
-    for file in files:
-        # webkitdirectory preserves paths (e.g. folder/file.pdf). We flatten it for simple matching.
-        safe_filename = os.path.basename(file.filename)
-        file_path = upload_dir / safe_filename
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        saved_files.append(safe_filename)
+    try:
+        # Validate total size (50MB limit for Render free tier's 30s timeout)
+        MAX_TOTAL_SIZE = 50 * 1024 * 1024  # 50MB
+        total_size = 0
         
-    return {"status": "success", "batch_id": batch_id, "files": saved_files}
+        batch_id = str(uuid.uuid4())
+        upload_dir = Path("uploads/attachments") / batch_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        saved_files = []
+        for file in files:
+            safe_filename = os.path.basename(file.filename)
+            file_path = upload_dir / safe_filename
+            
+            # Read and write with size tracking
+            content = await file.read()
+            total_size += len(content)
+            
+            if total_size > MAX_TOTAL_SIZE:
+                # Cleanup partial upload
+                shutil.rmtree(upload_dir, ignore_errors=True)
+                raise HTTPException(status_code=413, detail=f"Total upload size exceeds 50MB limit. Please reduce the number or size of files.")
+            
+            with file_path.open("wb") as buffer:
+                buffer.write(content)
+            saved_files.append(safe_filename)
+            
+        return {"status": "success", "batch_id": batch_id, "files": saved_files, "total_size_mb": round(total_size / 1024 / 1024, 2)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"UPLOAD ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 # ── Campaign Endpoints ────────────────────────────────────
 @app.get("/api/campaigns")
