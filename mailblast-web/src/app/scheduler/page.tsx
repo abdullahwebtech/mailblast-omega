@@ -26,7 +26,7 @@ export default function SchedulerPage() {
 
   useEffect(() => { 
     fetchJobs(page); 
-    const interval = setInterval(() => fetchJobs(page), 5000); 
+    const interval = setInterval(() => { if (!document.hidden) fetchJobs(page); }, 15000); 
     return () => clearInterval(interval); 
   }, [page]);
 

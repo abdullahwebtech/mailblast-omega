@@ -61,7 +61,7 @@ export default function CampaignsPage() {
 
   useEffect(() => { 
     fetchCampaigns(page); 
-    const interval = setInterval(() => fetchCampaigns(page), 3000); 
+    const interval = setInterval(() => { if (!document.hidden) fetchCampaigns(page); }, 10000); 
     return () => clearInterval(interval); 
   }, [page]);
 

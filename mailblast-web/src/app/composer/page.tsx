@@ -13,10 +13,13 @@ export default function Composer() {
   useEffect(() => {
     let interval: any;
     if (activeCampaignId && (!campaignProgress || campaignProgress.status === 'running')) {
-      interval = setInterval(() => {
+      const pollData = () => {
+        if (document.hidden) return; // Don't poll when tab is not visible
         fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/campaigns/${activeCampaignId}`).then(res => res.json()).then(data => setCampaignProgress(data)).catch(err => console.error(err));
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/analytics/send-log?campaign_id=${activeCampaignId}&limit=500`).then(res => res.json()).then(data => setLiveLogs(data.log || [])).catch(err => console.error(err));
-      }, 2000);
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/analytics/send-log?campaign_id=${activeCampaignId}&limit=100`).then(res => res.json()).then(data => setLiveLogs(data.log || [])).catch(err => console.error(err));
+      };
+      pollData(); // Immediate first fetch
+      interval = setInterval(pollData, 5000);
     }
     return () => clearInterval(interval);
   }, [activeCampaignId, campaignProgress]);

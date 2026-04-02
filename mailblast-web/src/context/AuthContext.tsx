@@ -83,7 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isInterceptTarget = url.startsWith(cleanApiUrl) || url.startsWith('/api');
 
       if (isInterceptTarget) {
-        console.log(`[Fetch Interceptor] Injecting X-User-Id for: ${url}`);
         if (typeof finalResource === 'string') {
           finalConfig = { ...config };
           const headers = new Headers(finalConfig.headers || {});
