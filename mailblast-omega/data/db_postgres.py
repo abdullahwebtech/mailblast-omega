@@ -39,8 +39,9 @@ class Database:
                 if self._local_pool is None:
                     from psycopg2.pool import ThreadedConnectionPool
                     # Supabase Pooler optimal settings (Port 6543): Limit to 20 to prevent PgBouncer exhaustion
-                    self._local_pool = ThreadedConnectionPool(1, 20, dsn=self.db_url)
-                    print("DB_POOL: ThreadedConnectionPool created (1-20 connections)")
+                    # minconn=0 ensures the server can boot instantly without blocking on TCP handshakes!
+                    self._local_pool = ThreadedConnectionPool(0, 20, dsn=self.db_url, connect_timeout=10)
+                    print("DB_POOL: ThreadedConnectionPool created (0-20 connections)")
         return self._local_pool
 
     def _get_conn(self):
@@ -50,11 +51,11 @@ class Database:
                 self.conn = None
                 self._from_pool = False
             def __enter__(self):
-                pool = db_ref._get_pool()
                 MAX_RETRIES = 3
                 
                 for attempt in range(MAX_RETRIES):
                     try:
+                        pool = db_ref._get_pool()
                         self.conn = pool.getconn()
                         self._from_pool = True
                         self.conn.autocommit = False
