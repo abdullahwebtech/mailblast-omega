@@ -38,9 +38,9 @@ class Database:
             with self._pool_lock:
                 if self._local_pool is None:
                     from psycopg2.pool import ThreadedConnectionPool
-                    # Increase to 60 (Safest limit for Supabase Free Tier direct connections)
-                    self._local_pool = ThreadedConnectionPool(0, 60, dsn=self.db_url)
-                    print("DB_POOL: ThreadedConnectionPool created (0-60 connections for scalable UI)")
+                    # Supabase Pooler optimal settings (Port 6543): Limit to 20 to prevent PgBouncer exhaustion
+                    self._local_pool = ThreadedConnectionPool(1, 20, dsn=self.db_url)
+                    print("DB_POOL: ThreadedConnectionPool created (1-20 connections)")
         return self._local_pool
 
     def _get_conn(self):
@@ -50,72 +50,34 @@ class Database:
                 self.conn = None
                 self._from_pool = False
             def __enter__(self):
-                MAX_RETRIES = 2
+                pool = db_ref._get_pool()
+                MAX_RETRIES = 3
+                
                 for attempt in range(MAX_RETRIES):
                     try:
-                        pool = db_ref._get_pool()
-                        import threading
-                        conn_result = []
-                        error_result = []
-                        timeout_flag = []
+                        self.conn = pool.getconn()
+                        self._from_pool = True
+                        self.conn.autocommit = False
                         
-                        def try_get():
-                            try:
-                                c = pool.getconn()
-                                if timeout_flag:
-                                    # Main thread timed out, put connection back immediately!
-                                    try: pool.putconn(c, close=True)
-                                    except: pass
-                                else:
-                                    conn_result.append(c)
-                            except Exception as e:
-                                error_result.append(e)
-                                
-                        t = threading.Thread(target=try_get, daemon=True)
-                        t.start()
-                        t.join(timeout=3.0)  # 3-second max wait for pool connection
-                        timeout_flag.append(True) # Flag the thread to clean up if it's lagging
-                        
-                        if conn_result:
-                            self.conn = conn_result[0]
-                            self._from_pool = True
-                            self.conn.autocommit = False
-                            # Fix 8: Set statement timeout to prevent long-running queries
-                            try:
-                                cur = self.conn.cursor()
-                                cur.execute("SET statement_timeout = '10s'")
-                                cur.close()
-                            except Exception:
-                                pass  # Non-critical, don't block on this
-                            return self
-                        else:
-                            if error_result: raise error_result[0]
-                            raise Exception("pool acquisition timeout (3s)")
-                            
-                    except Exception as e:
-                        if self.conn:
-                            try: db_ref._get_pool().putconn(self.conn, close=True)
-                            except: pass
-                            self.conn = None
-                        
-                        # CRITICAL FALLBACK: If pool is saturated/slow, don't block the UI!
-                        # Open a fresh direct connection immediately.
+                        # Set statement timeout to prevent long-running queries locking the pool
                         try:
-                            self.conn = psycopg2.connect(db_ref.db_url, connect_timeout=5)
-                            self.conn.autocommit = False
-                            self._from_pool = False
-                            # Fix 8: statement timeout on fallback connections too
-                            try:
-                                cur = self.conn.cursor()
-                                cur.execute("SET statement_timeout = '10s'")
-                                cur.close()
-                            except Exception:
-                                pass
-                            return self
-                        except Exception as direct_e:
-                            if attempt == MAX_RETRIES - 1: raise direct_e
+                            cur = self.conn.cursor()
+                            cur.execute("SET statement_timeout = '10s'")
+                            cur.close()
+                        except Exception:
+                            pass
+                            
+                        return self
                         
-                        time.sleep(0.1 * (2 ** attempt))
+                    except Exception as e:
+                        # e.g., psycopg2.pool.PoolError when pool is exhausted, or OperationalError
+                        if attempt == MAX_RETRIES - 1:
+                            raise Exception(f"Failed to acquire DB connection after retries: {str(e)}")
+                            
+                        # Wait progressively before retrying against the pool
+                        import time
+                        time.sleep(0.5 * (2 ** attempt))
+                        
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
