@@ -37,8 +37,9 @@ class Database:
         if self._local_pool is None:
             with self._pool_lock:
                 if self._local_pool is None:
-                    from psycopg2.pool import SimpleConnectionPool
-                    self._local_pool = SimpleConnectionPool(0, 10, dsn=self.db_url)
+                    from psycopg2.pool import ThreadedConnectionPool
+                    self._local_pool = ThreadedConnectionPool(0, 20, dsn=self.db_url)
+                    print("DB_POOL: ThreadedConnectionPool created (0-20 connections)")
         return self._local_pool
 
     def _get_conn(self):
