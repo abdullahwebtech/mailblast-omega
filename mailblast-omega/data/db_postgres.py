@@ -13,6 +13,7 @@ DB_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'database', 'omega.db'))
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
+
 class Database:
     def __init__(self, db_url: str = DATABASE_URL):
         self.db_url = db_url
@@ -21,45 +22,70 @@ class Database:
             separator = "&" if "?" in self.db_url else "?"
             self.db_url += f"{separator}sslmode=require"
         
-        print(f"DB_INIT: Connecting to PostgreSQL (direct mode, no pool)")
+        self._local_pool = None
+        self._pool_lock = __import__('threading').Lock()
+        
+        print(f"DB_INIT: Connecting to PostgreSQL (pooled mode, same-region)")
         try:
             self._init_db()
             print("DB_INIT: Schema initialized successfully.")
         except Exception as e:
             print(f"DB_INIT: Schema init deferred - {e}")
 
-    def _make_connection(self):
-        """Create a fresh, direct connection to PostgreSQL."""
-        MAX_RETRIES = 5
-        last_err = None
-        for attempt in range(MAX_RETRIES):
-            try:
-                conn = psycopg2.connect(self.db_url)
-                conn.autocommit = False
-                return conn
-            except Exception as e:
-                last_err = e
-                if attempt < MAX_RETRIES - 1:
-                    wait = 1.0 * (2 ** attempt)
-                    print(f"DB_CONNECT: Retry {attempt+1}/{MAX_RETRIES} in {wait}s - {e}")
-                    time.sleep(wait)
-        raise last_err
+    def _get_pool(self):
+        """Lazy-create the connection pool on first use."""
+        if self._local_pool is None:
+            with self._pool_lock:
+                if self._local_pool is None:
+                    from psycopg2.pool import SimpleConnectionPool
+                    self._local_pool = SimpleConnectionPool(0, 10, dsn=self.db_url)
+        return self._local_pool
 
     def _get_conn(self):
-        db_ref = self  # capture reference for inner class
+        db_ref = self
         class ConnWrapper:
             def __init__(self):
                 self.conn = None
+                self._from_pool = False
             def __enter__(self):
-                self.conn = db_ref._make_connection()
+                MAX_RETRIES = 3
+                for attempt in range(MAX_RETRIES):
+                    try:
+                        pool = db_ref._get_pool()
+                        self.conn = pool.getconn()
+                        self._from_pool = True
+                        self.conn.autocommit = False
+                        return self
+                    except Exception as e:
+                        if self.conn:
+                            try: db_ref._get_pool().putconn(self.conn, close=True)
+                            except: pass
+                            self.conn = None
+                        if attempt < MAX_RETRIES - 1:
+                            time.sleep(0.5 * (2 ** attempt))
+                        else:
+                            # Fallback: direct connection if pool fails
+                            try:
+                                self.conn = psycopg2.connect(db_ref.db_url)
+                                self.conn.autocommit = False
+                                self._from_pool = False
+                                return self
+                            except:
+                                raise e
                 return self
             def __exit__(self, exc_type, exc_val, exc_tb):
                 if not self.conn: return
                 if exc_type:
                     try: self.conn.rollback()
                     except: pass
-                try: self.conn.close()
-                except: pass
+                if self._from_pool:
+                    try: db_ref._get_pool().putconn(self.conn)
+                    except: 
+                        try: self.conn.close()
+                        except: pass
+                else:
+                    try: self.conn.close()
+                    except: pass
             def execute(self, query, params=None):
                 cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
                 query = query.replace("?", "%s")
@@ -71,6 +97,7 @@ class Database:
             def commit(self):
                 self.conn.commit()
         return ConnWrapper()
+
     def _init_db(self):
         schema = """
         CREATE TABLE IF NOT EXISTS accounts (
@@ -455,21 +482,23 @@ class Database:
                 try:
                     # 1. Fetch current time and sent time
                     now = dt.datetime.utcnow()
-                    sent_at_str = row['sent_at']
+                    sent_at_raw = row['sent_at']
                     
-                    # sent_at in SQLite might be "YYYY-MM-DD HH:MM:SS"
-                    try:
-                        sent_dt = dt.datetime.strptime(sent_at_str, "%Y-%m-%d %H:%M:%S")
-                    except ValueError:
-                        # Fallback for ISO format if stored differently
-                        sent_dt = dt.datetime.fromisoformat(sent_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                    # PostgreSQL returns datetime objects; SQLite returns strings
+                    if isinstance(sent_at_raw, dt.datetime):
+                        sent_dt = sent_at_raw.replace(tzinfo=None)  # Strip timezone for comparison
+                    elif isinstance(sent_at_raw, str):
+                        try:
+                            sent_dt = dt.datetime.strptime(sent_at_raw, "%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            sent_dt = dt.datetime.fromisoformat(sent_at_raw.replace('Z', '+00:00')).replace(tzinfo=None)
+                    else:
+                        sent_dt = now  # Safe fallback
                     
                     # 2. PER-EMAIL COOLDOWN LOGIC (60 Seconds)
-                    # We ignore any hits within the first 60 seconds to block ISP scans/bots.
                     diff = (now - sent_dt).total_seconds()
                     
                     if diff < 60:
-                        # Log the ignore to server console so user can see it's being "blocked" correctly
                         print(f"TRACKING: [IGNORED] Item {tracking_id} hit at {int(diff)}s (Cooldown active for 60s)")
                         return "ignored_initial_cooldown"
 
