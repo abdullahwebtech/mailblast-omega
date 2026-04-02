@@ -25,6 +25,7 @@ app = FastAPI(title="MailBlast OMEGA API", version="1.0.3")
 scheduler_engine = None
 
 @app.get("/")
+@app.head("/")
 async def root_health():
     return {"status": "healthy", "engine": "MailBlast OMEGA", "version": "1.0.3"}
 
@@ -609,7 +610,7 @@ class GenerateRequest(BaseModel):
     variants: int = 1
 
 @app.post("/api/ai/generate")
-async def generate_email(req: GenerateRequest):
+def generate_email(req: GenerateRequest):
     from core.ai_generator import AIGenerator
     from dotenv import load_dotenv
     load_dotenv(override=True)
@@ -618,7 +619,7 @@ async def generate_email(req: GenerateRequest):
     return {"result": results[0], "all_variants": results}
 
 @app.post("/api/ai/rewrite")
-async def rewrite_email(body: dict):
+def rewrite_email(body: dict):
     from core.ai_generator import AIGenerator
     from dotenv import load_dotenv
     load_dotenv(override=True)
@@ -627,7 +628,7 @@ async def rewrite_email(body: dict):
     return {"result": result}
 
 @app.post("/api/ai/subjects")
-async def generate_subjects(body: dict):
+def generate_subjects(body: dict):
     from core.ai_generator import AIGenerator
     ai = AIGenerator(groq_api_key=os.getenv("GROQ_API_KEY", ""))
     subjects = ai.generate_subjects(context=body.get("context", ""), count=body.get("count", 10))
@@ -1153,41 +1154,41 @@ async def api_schedule_single(req: SingleEmailScheduleRequest):
     return {"status": "success", "campaign_id": camp_id, "job_id": job_id}
 
 @app.get("/api/scheduler/list")
-async def list_scheduled_jobs(page: int = 1, limit: int = 15):
+def list_scheduled_jobs(page: int = 1, limit: int = 15):
     offset = (page - 1) * limit
     result = scheduler_engine.list_jobs(limit=limit, offset=offset)
     return {"jobs": result["items"], "total": result["total"]}
 
 @app.delete("/api/scheduler/jobs/{job_id}")
-async def cancel_scheduled_job(job_id: int):
+def cancel_scheduled_job(job_id: int):
     scheduler_engine.cancel_job(job_id)
     return {"status": "success"}
 
 # ── Analytics Endpoints ───────────────────────────────────
 @app.get("/api/analytics/stats")
-async def get_stats(range: str = 'today', account_id: Optional[int] = None):
+def get_stats(range: str = 'today', account_id: Optional[int] = None):
     from data.db import get_global_stats
     return get_global_stats(time_range=range, account_id=account_id)
 
 @app.get("/api/analytics/recent-campaigns")
-async def get_recent_campaigns_api():
+def get_recent_campaigns_api():
     from data.db import get_recent_campaigns
     return {"campaigns": get_recent_campaigns(limit=5)}
 
 @app.get("/api/analytics/open-rate-history")
-async def get_dispatch_history_api(range: str = '7d', account_id: Optional[int] = None):
+def get_dispatch_history_api(range: str = '7d', account_id: Optional[int] = None):
     from data.db import get_dispatch_history
     return {"data": get_dispatch_history(time_range=range, account_id=account_id)}
 
 @app.get("/api/analytics/send-log")
-async def get_send_log(campaign_id: int = None, account_id: int = None, tracking_status: str = 'all', page: int = 1, limit: int = 15):
+def get_send_log(campaign_id: int = None, account_id: int = None, tracking_status: str = 'all', page: int = 1, limit: int = 15):
     from data.db import get_send_log
     offset = (page - 1) * limit
     result = get_send_log(campaign_id=campaign_id, account_id=account_id, tracking_status=tracking_status, limit=limit, offset=offset)
     return {"log": result["items"], "total": result["total"]}
 
 @app.get("/api/t/o/{tracking_id}.gif")
-async def track_open(tracking_id: str, request: Request, background_tasks: BackgroundTasks):
+def track_open(tracking_id: str, request: Request, background_tasks: BackgroundTasks):
     from data.db import mark_opened, get_db
     ip = request.client.host if request.client else "unknown"
     ua = request.headers.get('user-agent', '')
@@ -1229,7 +1230,7 @@ async def track_open(tracking_id: str, request: Request, background_tasks: Backg
     return Response(content=pixel, media_type="image/gif", headers=headers)
 
 @app.get("/api/analytics/send-log/{log_id}/details")
-async def get_send_log_details(log_id: int):
+def get_send_log_details(log_id: int):
     from fastapi import HTTPException
     from data.db import get_db
     import json
@@ -1269,14 +1270,14 @@ async def get_send_log_details(log_id: int):
 
 # ── Settings Endpoints ────────────────────────────────────
 @app.get("/api/settings/get_groq")
-async def get_groq_key():
+def get_groq_key():
     from dotenv import load_dotenv
     import os
     load_dotenv(override=True)
     return {"key": os.getenv("GROQ_API_KEY", "")}
 
 @app.post("/api/settings/update_groq")
-async def update_groq_key(data: dict):
+def update_groq_key(data: dict):
     key = data.get("key", "")
     env_path = ".env"
     import os
@@ -1297,7 +1298,7 @@ async def update_groq_key(data: dict):
     return {"status": "success"}
 
 @app.get("/api/settings/get_seeds")
-async def get_seeds():
+def get_seeds():
     seeds_path = "seeds.txt"
     if os.path.exists(seeds_path):
         with open(seeds_path, "r") as f:
@@ -1305,7 +1306,7 @@ async def get_seeds():
     return {"seeds": ""}
 
 @app.post("/api/settings/update_seeds")
-async def update_seeds(data: dict):
+def update_seeds(data: dict):
     seeds = data.get("seeds", "")
     with open("seeds.txt", "w") as f:
         f.write(seeds)
@@ -1313,7 +1314,7 @@ async def update_seeds(data: dict):
 
 # ── Accounts Endpoints ────────────────────────────────────
 @app.get("/api/accounts")
-async def list_accounts(page: int = 1, limit: int = 15):
+def list_accounts(page: int = 1, limit: int = 15):
     from data.db import get_all_accounts
     offset = (page - 1) * limit
     result = get_all_accounts(limit=limit, offset=offset)
@@ -1330,7 +1331,7 @@ class AccountRequest(BaseModel):
     imap_port: int = 993
 
 @app.post("/api/accounts/add")
-async def api_add_account(req: AccountRequest):
+def api_add_account(req: AccountRequest):
     from data.db import add_account
     from core.credential_vault import encrypt_password
     enc = encrypt_password(req.password)
@@ -1347,7 +1348,7 @@ async def api_add_account(req: AccountRequest):
     return {"status": "success", "account_id": acc_id}
 
 @app.delete("/api/accounts/{account_id}")
-async def delete_account(account_id: int):
+def delete_account(account_id: int):
     from data.db import soft_delete_item
     soft_delete_item("accounts", account_id)
     return {"status": "deleted"}
@@ -1361,7 +1362,7 @@ class EditAccountRequest(BaseModel):
     imap_port: int = 993
 
 @app.put("/api/accounts/{account_id}")
-async def edit_account(account_id: int, req: EditAccountRequest):
+def edit_account(account_id: int, req: EditAccountRequest):
     from data.db import get_db
     from core.credential_vault import encrypt_password
     with get_db()._get_conn() as conn:
@@ -1384,7 +1385,7 @@ async def edit_account(account_id: int, req: EditAccountRequest):
     return {"status": "success"}
 
 @app.post("/api/accounts/gmail/auth-url")
-async def gmail_auth_url():
+def gmail_auth_url():
     """Returns OAuth URL for Gmail login from web browser."""
     from core.gmail_client import get_oauth_url
     return {"url": get_oauth_url()}
@@ -1463,7 +1464,7 @@ async def get_warmup_status():
     return {"active_ids": list(active_warmups.keys())}
 
 @app.get("/api/warmup/stats")
-async def get_warmup_stats_api():
+def get_warmup_stats_api():
     from data.db import get_warmup_stats
     return get_warmup_stats()
 
@@ -1497,7 +1498,7 @@ async def health():
 
 # ── Campaign Control Endpoints ──────────────────────────
 @app.post("/api/campaign/{campaign_id}/pause")
-async def pause_campaign(campaign_id: int):
+def pause_campaign(campaign_id: int):
     from data.db import get_db
     db = get_db()
     with db._get_conn() as conn:
@@ -1507,7 +1508,7 @@ async def pause_campaign(campaign_id: int):
     return {"status": "success", "message": "Campaign paused."}
 
 @app.post("/api/campaign/{campaign_id}/resume")
-async def resume_campaign(campaign_id: int):
+def resume_campaign(campaign_id: int):
     from data.db import get_db
     db = get_db()
     with db._get_conn() as conn:
@@ -1517,7 +1518,7 @@ async def resume_campaign(campaign_id: int):
     return {"status": "success", "message": "Campaign resumed."}
 
 @app.post("/api/campaign/{campaign_id}/cancel")
-async def cancel_campaign(campaign_id: int):
+def cancel_campaign(campaign_id: int):
     from data.db import get_db
     db = get_db()
     with db._get_conn() as conn:
@@ -1528,13 +1529,13 @@ async def cancel_campaign(campaign_id: int):
     return {"status": "success", "message": "Campaign cancelled."}
 
 @app.get("/api/blacklist")
-async def api_get_blacklist(page: int = 1, limit: int = 15):
+def api_get_blacklist(page: int = 1, limit: int = 15):
     from data.db import get_blacklist
     offset = (page - 1) * limit
     return get_blacklist(limit=limit, offset=offset)
 
 @app.post("/api/blacklist/add")
-async def api_add_blacklist(data: dict):
+def api_add_blacklist(data: dict):
     from data.db import add_to_blacklist
     email = data.get("email")
     if not email: return {"status": "error", "message": "Email is required"}
@@ -1542,20 +1543,20 @@ async def api_add_blacklist(data: dict):
     return {"status": "success"}
 
 @app.delete("/api/blacklist/{email}")
-async def api_remove_blacklist(email: str):
+def api_remove_blacklist(email: str):
     from data.db import remove_from_blacklist
     remove_from_blacklist(email)
     return {"status": "success"}
 
 # --- Templates Endpoints ---
 @app.get("/api/templates")
-async def list_templates(page: int = 1, limit: int = 15):
+def list_templates(page: int = 1, limit: int = 15):
     from data.db import get_templates
     offset = (page - 1) * limit
     return get_templates(limit=limit, offset=offset)
 
 @app.post("/api/templates/add")
-async def api_add_template(data: dict):
+def api_add_template(data: dict):
     from data.db import add_template
     name = data.get("name")
     subject = data.get("subject")
@@ -1565,26 +1566,26 @@ async def api_add_template(data: dict):
     return {"status": "success"}
 
 @app.delete("/api/templates/{template_id}")
-async def api_remove_template(template_id: int):
+def api_remove_template(template_id: int):
     from data.db import soft_delete_item
     soft_delete_item("templates", template_id)
     return {"status": "success"}
 
 @app.delete("/api/campaigns/{campaign_id}")
-async def delete_campaign(campaign_id: int):
+def delete_campaign(campaign_id: int):
     from data.db import soft_delete_item
     success = soft_delete_item("campaigns", campaign_id)
     return {"status": "success"} if success else {"status": "error"}
 
 @app.delete("/api/analytics/send-log/{log_id}")
-async def delete_send_log(log_id: int):
+def delete_send_log(log_id: int):
     from data.db import soft_delete_item
     success = soft_delete_item("send_log", log_id)
     return {"status": "success"} if success else {"status": "error"}
 
 # --- Trash Endpoints ---
 @app.get("/api/trash/{category}")
-async def fetch_trash(category: str, page: int = 1, limit: int = 50):
+def fetch_trash(category: str, page: int = 1, limit: int = 50):
     from data.db import get_trash
     valid_categories = {"campaigns": "campaigns", "accounts": "accounts", "templates": "templates", "sent_emails": "send_log"}
     if category not in valid_categories:
@@ -1594,7 +1595,7 @@ async def fetch_trash(category: str, page: int = 1, limit: int = 50):
     return {"items": res["items"], "total": res["total"]}
 
 @app.post("/api/trash/{category}/{item_id}/restore")
-async def restore_trash_item(category: str, item_id: int):
+def restore_trash_item(category: str, item_id: int):
     from data.db import restore_item
     valid_categories = {"campaigns": "campaigns", "accounts": "accounts", "templates": "templates", "sent_emails": "send_log"}
     if category not in valid_categories: return {"status": "error"}
@@ -1602,7 +1603,7 @@ async def restore_trash_item(category: str, item_id: int):
     return {"status": "success"} if success else {"status": "error"}
 
 @app.delete("/api/trash/{category}/{item_id}/hard")
-async def hard_delete_trash_item(category: str, item_id: int):
+def hard_delete_trash_item(category: str, item_id: int):
     from data.db import hard_delete_item
     valid_categories = {"campaigns": "campaigns", "accounts": "accounts", "templates": "templates", "sent_emails": "send_log"}
     if category not in valid_categories: return {"status": "error"}
@@ -1610,7 +1611,7 @@ async def hard_delete_trash_item(category: str, item_id: int):
     return {"status": "success"} if success else {"status": "error"}
 
 @app.post("/api/trash/{category}/empty")
-async def api_empty_trash(category: str):
+def api_empty_trash(category: str):
     from data.db import empty_trash
     valid_categories = {"campaigns": "campaigns", "accounts": "accounts", "templates": "templates", "sent_emails": "send_log"}
     if category not in valid_categories: return {"status": "error"}
@@ -1618,7 +1619,7 @@ async def api_empty_trash(category: str):
     return {"status": "success"} if success else {"status": "error"}
 
 @app.post("/api/trash/{category}/restore-all")
-async def api_restore_all_trash(category: str):
+def api_restore_all_trash(category: str):
     from data.db import restore_all_items
     valid_categories = {"campaigns": "campaigns", "accounts": "accounts", "templates": "templates", "sent_emails": "send_log"}
     if category not in valid_categories: return {"status": "error"}
@@ -1626,7 +1627,7 @@ async def api_restore_all_trash(category: str):
     return {"status": "success"} if success else {"status": "error"}
 
 @app.post("/api/trash/{category}/delete-all")
-async def api_delete_all_active(category: str):
+def api_delete_all_active(category: str):
     from data.db import delete_all_items
     valid_categories = {"campaigns": "campaigns", "accounts": "accounts", "templates": "templates", "sent_emails": "send_log"}
     if category not in valid_categories: return {"status": "error"}
