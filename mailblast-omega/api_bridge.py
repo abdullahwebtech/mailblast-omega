@@ -65,18 +65,26 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.middleware("http")
 async def register_sender_ip_and_user_id(request: Request, call_next):
     from data.db import get_db, current_user_id
+    import asyncio
     
     uid = request.headers.get("x-user-id")
-    print(f"DEBUG: Request {request.url.path} | X-User-Id: {uid}")
+    # Silence excessive debug logging for rapid polls
+    if not request.url.path.startswith("/api/campaigns") and request.url.path != "/":
+        print(f"DEBUG: Request {request.url.path} | X-User-Id: {uid}")
+        
     token = current_user_id.set(uid)
     
     try:
-        # Register IP for all management API calls (not tracking)
+        # Fire-and-forget IP logging to avoid synchronous DB block in async middleware
         if not request.url.path.startswith("/api/t/o/"):
             ip = request.client.host if request.client else None
             ua = request.headers.get('user-agent', '')
             if ip:
-                get_db().register_internal_ip(ip, ua)
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.run_in_executor(None, get_db().register_internal_ip, ip, ua)
+                except Exception:
+                    pass
         
         response = await call_next(request)
         return response
@@ -100,6 +108,13 @@ async def startup_event():
     global main_loop
     import asyncio
     main_loop = asyncio.get_running_loop()
+    
+    # Fix 2: Pre-warm the database schema before accepting traffic so Render pings don't timeout
+    from data.db import get_db
+    try:
+        await main_loop.run_in_executor(None, get_db)
+    except Exception as e:
+        print(f"STARTUP DB INIT WARNING: {e}")
     
     # Start the robust sequential queue worker
     queue_worker.start()
