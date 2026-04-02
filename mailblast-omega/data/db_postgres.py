@@ -54,20 +54,29 @@ class Database:
                 for attempt in range(MAX_RETRIES):
                     try:
                         pool = db_ref._get_pool()
-                        # Fix 7: Timeout-based pool acquisition (3s max wait)
                         import threading
-                        conn_result = [None]
-                        error_result = [None]
+                        conn_result = []
+                        error_result = []
+                        timeout_flag = []
+                        
                         def try_get():
                             try:
-                                conn_result[0] = pool.getconn()
+                                c = pool.getconn()
+                                if timeout_flag:
+                                    # Main thread timed out, put connection back immediately!
+                                    try: pool.putconn(c, close=True)
+                                    except: pass
+                                else:
+                                    conn_result.append(c)
                             except Exception as e:
-                                error_result[0] = e
+                                error_result.append(e)
+                                
                         t = threading.Thread(target=try_get, daemon=True)
                         t.start()
                         t.join(timeout=3.0)  # 3-second max wait for pool connection
+                        timeout_flag.append(True) # Flag the thread to clean up if it's lagging
                         
-                        if conn_result[0] is not None:
+                        if conn_result:
                             self.conn = conn_result[0]
                             self._from_pool = True
                             self.conn.autocommit = False
@@ -80,7 +89,7 @@ class Database:
                                 pass  # Non-critical, don't block on this
                             return self
                         else:
-                            # Pool timed out or errored — fast-fail to direct connection
+                            if error_result: raise error_result[0]
                             raise Exception("pool acquisition timeout (3s)")
                             
                     except Exception as e:
