@@ -107,6 +107,9 @@ async def startup_event():
     # Start trash auto-cleanup daemon
     main_loop.create_task(trash_cleanup_loop())
 
+    # Start the Anti-Sleep manager
+    anti_sleep_manager.start()
+
 def sync_broadcast(event: dict):
     if main_loop and main_loop.is_running():
         import asyncio
@@ -391,13 +394,65 @@ class CampaignRunner(threading.Thread):
                     conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "failed"})
 
+class AntiSleepManager:
+    """Keeps the Render service awake by self-pinging when campaigns are active."""
+    def __init__(self):
+        self.thread = threading.Thread(target=self._keep_alive_loop, daemon=True)
+        self.is_running = False
+
+    def start(self):
+        self.is_running = True
+        self.thread.name = "AntiSleepManager"
+        self.thread.start()
+
+    def _keep_alive_loop(self):
+        import http.client
+        from urllib.parse import urlparse
+        # Wait for server to fully start
+        time.sleep(60)
+        
+        # Use TRACKING_DOMAIN or fallback
+        base_url = os.getenv("TRACKING_DOMAIN", "http://localhost:10000").rstrip('/')
+        url_parts = urlparse(base_url)
+        host = url_parts.netloc
+        scheme = url_parts.scheme or "https"
+        
+        print(f"ANTI-SLEEP: Keep-alive manager started. Targeting {host}")
+        
+        while self.is_running:
+            try:
+                # Check directly if runners are active
+                has_active = len(queue_worker.active_runners) > 0
+                
+                if has_active:
+                    print(f"ANTI-SLEEP: Active Dispatching detected. Pinging {host} to stay awake...")
+                    try:
+                        if scheme == "https":
+                            conn = http.client.HTTPSConnection(host, timeout=15)
+                        else:
+                            conn = http.client.HTTPConnection(host, timeout=15)
+                        
+                        conn.request("GET", "/")
+                        resp = conn.getresponse()
+                        print(f"ANTI-SLEEP: Ping response: {resp.status}")
+                        conn.close()
+                    except Exception as e:
+                        print(f"ANTI-SLEEP: Ping failed - {e}")
+            except Exception as e:
+                print(f"ANTI-SLEEP ERROR: {e}")
+            
+            # Wait 10 minutes (Render timeout is 15m)
+            time.sleep(600)
+
+anti_sleep_manager = AntiSleepManager()
+
 class SequentialQueueWorker:
     """Manages parallel campaign runners."""
     def __init__(self):
         self.thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.is_running = False
-        self.smtp_pool = SMTPConnectionPool(max_connections_per_account=20)
-        self.executor = ThreadPoolExecutor(max_workers=50) # Higher capacity for parallel runners
+        self.smtp_pool = SMTPConnectionPool(max_connections_per_account=10)
+        self.executor = ThreadPoolExecutor(max_workers=10) # Lowered from 50 to 10 for Render stability
         self.active_runners = {} # campaign_id -> CampaignRunner
         self.alert_event = threading.Event()
 
