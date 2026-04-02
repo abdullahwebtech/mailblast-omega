@@ -529,8 +529,8 @@ class Database:
                     conn.execute("""
                         UPDATE send_log 
                         SET opened = 1, open_count = open_count + 1, 
-                            first_opened_at = COALESCE(first_opened_at, CURRENT_TIMESTAMP),
-                            last_opened_at = CURRENT_TIMESTAMP
+                            first_opened_at = COALESCE(first_opened_at, CAST(CURRENT_TIMESTAMP AS TEXT)),
+                            last_opened_at = CAST(CURRENT_TIMESTAMP AS TEXT)
                         WHERE tracking_id = ?
                     """, (tracking_id,))
                     
