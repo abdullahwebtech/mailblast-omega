@@ -54,27 +54,57 @@ class Database:
                 for attempt in range(MAX_RETRIES):
                     try:
                         pool = db_ref._get_pool()
-                        self.conn = pool.getconn()
-                        self._from_pool = True
-                        self.conn.autocommit = False
-                        return self
+                        # Fix 7: Timeout-based pool acquisition (3s max wait)
+                        import threading
+                        conn_result = [None]
+                        error_result = [None]
+                        def try_get():
+                            try:
+                                conn_result[0] = pool.getconn()
+                            except Exception as e:
+                                error_result[0] = e
+                        t = threading.Thread(target=try_get, daemon=True)
+                        t.start()
+                        t.join(timeout=3.0)  # 3-second max wait for pool connection
+                        
+                        if conn_result[0] is not None:
+                            self.conn = conn_result[0]
+                            self._from_pool = True
+                            self.conn.autocommit = False
+                            # Fix 8: Set statement timeout to prevent long-running queries
+                            try:
+                                cur = self.conn.cursor()
+                                cur.execute("SET statement_timeout = '10s'")
+                                cur.close()
+                            except Exception:
+                                pass  # Non-critical, don't block on this
+                            return self
+                        else:
+                            # Pool timed out or errored — fast-fail to direct connection
+                            raise Exception("pool acquisition timeout (3s)")
+                            
                     except Exception as e:
                         if self.conn:
                             try: db_ref._get_pool().putconn(self.conn, close=True)
                             except: pass
                             self.conn = None
                         
-                        if "pool exhausted" in str(e).lower() or attempt == MAX_RETRIES - 1:
-                            # CRITICAL FALLBACK: If pool is empty, don't block the UI!
-                            # Open a fresh direct connection instead.
+                        # CRITICAL FALLBACK: If pool is saturated/slow, don't block the UI!
+                        # Open a fresh direct connection immediately.
+                        try:
+                            self.conn = psycopg2.connect(db_ref.db_url, connect_timeout=5)
+                            self.conn.autocommit = False
+                            self._from_pool = False
+                            # Fix 8: statement timeout on fallback connections too
                             try:
-                                print(f"DB_POOL: [WARNING] Pool Saturated. Falling back to direct connection... (Attempt {attempt+1})")
-                                self.conn = psycopg2.connect(db_ref.db_url)
-                                self.conn.autocommit = False
-                                self._from_pool = False
-                                return self
-                            except Exception as direct_e:
-                                if attempt == MAX_RETRIES - 1: raise direct_e
+                                cur = self.conn.cursor()
+                                cur.execute("SET statement_timeout = '10s'")
+                                cur.close()
+                            except Exception:
+                                pass
+                            return self
+                        except Exception as direct_e:
+                            if attempt == MAX_RETRIES - 1: raise direct_e
                         
                         time.sleep(0.1 * (2 ** attempt))
                 return self
@@ -706,36 +736,24 @@ class Database:
             return [{"label": r["label"], "sent": r["sent"], "opens": r["opens"]} for r in rows]
             
     def get_recent_campaigns(self, limit=5):
-        """Returns the most recent campaigns with stats."""
+        """Returns the most recent campaigns with stats — single query, no N+1."""
         uid = current_user_id.get()
         with self._get_conn() as conn:
             query = """
-                SELECT id, name, created_at, status, total
-                FROM campaigns WHERE deleted_at IS NULL
+                SELECT c.id, c.name, c.created_at, c.status, c.total,
+                       (SELECT COUNT(*) FROM send_log WHERE campaign_id = c.id AND status='sent') as sent,
+                       (SELECT COUNT(*) FROM send_log WHERE campaign_id = c.id AND opened=1) as opens
+                FROM campaigns c WHERE c.deleted_at IS NULL
             """
             params = []
             if uid:
-                query += " AND user_id = ?"
+                query += " AND c.user_id = ?"
                 params.append(uid)
-            query += " ORDER BY created_at DESC LIMIT ?"
+            query += " ORDER BY c.created_at DESC LIMIT ?"
             params.append(limit)
             
             rows = conn.execute(query, params).fetchall()
-            
-            res = []
-            for r in rows:
-                c_id = r["id"]
-                sent = conn.execute("SELECT COUNT(*) FROM send_log WHERE campaign_id=? AND status='sent'", (c_id,)).fetchone()[0]
-                opens = conn.execute("SELECT COUNT(*) FROM send_log WHERE campaign_id=? AND opened=1", (c_id,)).fetchone()[0]
-                res.append({
-                    "id": c_id,
-                    "name": r["name"],
-                    "created_at": r["created_at"],
-                    "status": r["status"],
-                    "sent": sent,
-                    "opens": opens
-                })
-            return res
+            return [dict(r) for r in rows]
 
     # --- Templates ---
     def get_templates(self, limit: int = 15, offset: int = 0):

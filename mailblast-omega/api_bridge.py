@@ -209,6 +209,42 @@ class CampaignRunner(threading.Thread):
         self.dispatch_executor = executors['dispatch']
         self.sync_executor = executors['sync']
         self.is_running = True
+        # Fix 1: Cached campaign status (check DB every 3s, not per-email)
+        self._cached_status = 'running'
+        self._status_checked_at = 0
+        self._STATUS_CHECK_INTERVAL = 3  # seconds
+        # Fix 2: Cached account data (refresh every 60s)
+        self._account_cache = {}
+        self._account_cache_time = 0
+        self._ACCOUNT_CACHE_TTL = 60  # seconds
+
+    def _check_campaign_status(self):
+        """Fix 1: Time-throttled status check — only queries DB every 3 seconds."""
+        now = time.time()
+        if now - self._status_checked_at < self._STATUS_CHECK_INTERVAL:
+            return self._cached_status
+        try:
+            with self.db._get_conn() as conn:
+                row = conn.execute("SELECT status FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
+            self._cached_status = dict(row)['status'] if row else 'stopped'
+        except Exception:
+            pass  # Keep last known status on DB error
+        self._status_checked_at = now
+        return self._cached_status
+
+    def _get_account(self, account_id):
+        """Fix 2: Cached account lookup — fetches from DB only every 60s."""
+        now = time.time()
+        if now - self._account_cache_time > self._ACCOUNT_CACHE_TTL:
+            # Refresh entire cache
+            try:
+                with self.db._get_conn() as conn:
+                    rows = conn.execute("SELECT * FROM accounts WHERE deleted_at IS NULL").fetchall()
+                self._account_cache = {r['id']: dict(r) for r in rows}
+                self._account_cache_time = now
+            except Exception as e:
+                print(f"WORKER: Account cache refresh failed: {e}")
+        return self._account_cache.get(account_id)
 
     def run(self):
         print(f"WORKER: Starting parallel runner for Campaign #{self.campaign_id}")
@@ -222,25 +258,39 @@ class CampaignRunner(threading.Thread):
         except Exception as e:
             print(f"WORKER ERROR: Failed to reset stuck items for #{self.campaign_id}: {e}")
 
+        # Pre-warm account cache
+        self._get_account(0)
+
+        # Fix 3: Fetch campaign data ONCE before the loop (subject/body/delay never change mid-run)
+        _camp_data = None
+        _camp_fetched_at = 0
+        _CAMP_CACHE_TTL = 30  # Re-fetch only every 30 seconds
+
         while self.is_running:
             try:
-                with self.db._get_conn() as conn:
-                    row = conn.execute("SELECT * FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
-                
-                if not row:
-                    print(f"WORKER: Campaign #{self.campaign_id} not found. Stopping runner.")
-                    self.is_running = False
-                    break
-                
-                camp = dict(row)
-                if camp['status'] not in ('running',):
-                    print(f"WORKER: Campaign #{self.campaign_id} no longer running. Stopping runner.")
+                # Fix 1: Use cached status check instead of full campaign row fetch
+                current_status = self._check_campaign_status()
+                if current_status != 'running':
+                    print(f"WORKER: Campaign #{self.campaign_id} status is '{current_status}'. Stopping runner.")
                     self.is_running = False
                     break
 
+                # Fix 3: Only re-fetch campaign data every 30 seconds
+                now_t = time.time()
+                if _camp_data is None or (now_t - _camp_fetched_at) > _CAMP_CACHE_TTL:
+                    with self.db._get_conn() as conn:
+                        row = conn.execute("SELECT * FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
+                    if not row:
+                        print(f"WORKER: Campaign #{self.campaign_id} not found. Stopping runner.")
+                        self.is_running = False
+                        break
+                    _camp_data = dict(row)
+                    _camp_fetched_at = now_t
+                
+                camp = _camp_data
                 delay_seconds = float(camp.get('delay_seconds') or 0.1)
                 
-                # 2. Pick a BATCH of queued items
+                # 2. Pick a BATCH of queued items (reduced from 100 to 25 for pool pressure relief)
                 with self.db._get_conn() as conn:
                     now_str = datetime.now(timezone.utc).isoformat()
                     items = conn.execute("""
@@ -248,7 +298,7 @@ class CampaignRunner(threading.Thread):
                         WHERE campaign_id = ?
                         AND (status = 'queued' OR (status = 'retrying' AND next_retry_at <= ?))
                         ORDER BY status='retrying' DESC, id ASC
-                        LIMIT 100
+                        LIMIT 25
                     """, (self.campaign_id, now_str)).fetchall()
 
                 if not items:
@@ -269,53 +319,55 @@ class CampaignRunner(threading.Thread):
 
                 items = [dict(it) for it in items]
                 
-                # 3. Lock batch to 'processing'
-                item_ids = [str(item['id']) for item in items]
+                # Fix 3: Lock batch to 'processing' with proper parameterized query
+                item_ids = [item['id'] for item in items]
                 with self.db._get_conn() as conn:
-                    conn.execute(f"UPDATE send_log SET status = 'processing' WHERE id IN ({','.join(item_ids)})")
+                    placeholders = ','.join(['?'] * len(item_ids))
+                    conn.execute(f"UPDATE send_log SET status = 'processing' WHERE id IN ({placeholders})", tuple(item_ids))
                     conn.commit()
 
                 # 4. Dispatch with EXACT pacing
                 for item in items:
-                    # Re-check status before every single email dispatch for instant pause response
-                    with self.db._get_conn() as conn:
-                        status_row = conn.execute("SELECT status FROM campaigns WHERE id = ?", (self.campaign_id,)).fetchone()
-                        
-                    if not status_row or dict(status_row)['status'] != 'running':
+                    # Fix 1: Use cached status check (DB hit every 3s, not per-email)
+                    if self._check_campaign_status() != 'running':
                         # Re-queue remaining items in this batch
                         rem_idx = items.index(item)
-                        rem_ids = [str(i['id']) for i in items[rem_idx:]]
+                        rem_ids = [i['id'] for i in items[rem_idx:]]
                         with self.db._get_conn() as conn:
-                            conn.execute(f"UPDATE send_log SET status = 'queued' WHERE id IN ({','.join(rem_ids)})")
+                            ph = ','.join(['?'] * len(rem_ids))
+                            conn.execute(f"UPDATE send_log SET status = 'queued' WHERE id IN ({ph})", tuple(rem_ids))
                             conn.commit()
                         self.is_running = False
                         return
 
                     # Offload SMTP network latency to the dispatch pool
-                    self.dispatch_executor.submit(self._dispatch_single, item, camp, self.db)
+                    self.dispatch_executor.submit(self._dispatch_single, item, camp)
 
                     # Pacing Sleep (Rigidly accurate)
                     time.sleep(delay_seconds)
+
+                # Small yield between batches to let UI connections through
+                time.sleep(0.1)
 
             except Exception as e:
                 print(f"Runner Error [Camp #{self.campaign_id}]: {e}")
                 time.sleep(5)
 
-    def _dispatch_single(self, item, campaign, db):
-        # ... logic as before ...
-        import json, re, threading as _threading
+    def _dispatch_single(self, item, campaign):
+        """Dispatch a single email. Uses cached account data and self.db."""
+        import json, re
         account_id = item['account_id']
+        db = self.db
         try:
-            with db._get_conn() as conn:
-                row = conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
-            if not row:
+            # Fix 2: Use cached account lookup instead of per-email DB query
+            acc_dict = self._get_account(account_id)
+            if not acc_dict:
                 with db._get_conn() as conn:
                     conn.execute("UPDATE send_log SET status = 'failed', error_msg = 'Account not found' WHERE id = ?", (item['id'],))
                     conn.commit()
                 sync_broadcast({"type": "failed", "campaign_id": campaign['id'], "recipient": item['recipient'], "status": "failed"})
                 return
 
-            acc_dict = dict(row)
             recipient = item['recipient'].strip()
             if not recipient or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', recipient):
                 with db._get_conn() as conn:
@@ -447,16 +499,21 @@ class AntiSleepManager:
 anti_sleep_manager = AntiSleepManager()
 
 class SequentialQueueWorker:
-    """Manages parallel campaign runners."""
+    """Manages parallel campaign runners with watchdog protection."""
     def __init__(self):
         self.thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.is_running = False
         self.smtp_pool = SMTPConnectionPool(max_connections_per_account=10)
-        # Dedicated thread pools for isolation
-        self.dispatch_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="Dispatch") # SMTP
-        self.sync_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="IMAP") # Shadow Sync
+        # Fix 5: Reduced dispatch threads from 10 -> 5 to keep ~55 DB connections for UI
+        self.dispatch_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="Dispatch") # SMTP
+        self.sync_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="IMAP") # Shadow Sync
         self.active_runners = {} # campaign_id -> CampaignRunner
         self.alert_event = threading.Event()
+        # Fix 6: Watchdog tracking — {campaign_id: {"last_sent": count, "stale_since": timestamp}}
+        self._watchdog_state = {}
+        self._WATCHDOG_STALE_LIMIT = 1800  # 30 minutes with no progress = auto-pause
+        self._watchdog_last_run = 0
+        self._WATCHDOG_INTERVAL = 60  # Only run watchdog every 60 seconds (was every 5s)
 
     def start(self):
         self.is_running = True
@@ -474,13 +531,15 @@ class SequentialQueueWorker:
             try:
                 # 1. GC: Remove dead runners
                 to_remove = [cid for cid, r in self.active_runners.items() if not r.is_alive()]
-                for cid in to_remove: del self.active_runners[cid]
+                for cid in to_remove:
+                    del self.active_runners[cid]
+                    self._watchdog_state.pop(cid, None)
 
                 # 2. Monitor: Find campaigns marked 'running'
                 with db._get_conn() as conn:
                     running_camps = conn.execute("SELECT id FROM campaigns WHERE status = 'running'").fetchall()
 
-                # 3. Spawn: Start runners for any campaign that isn't running yet in parallel
+                # 3. Spawn: Start runners for any campaign that isn't running yet
                 for row in running_camps:
                     cid = row['id']
                     if cid not in self.active_runners:
@@ -489,6 +548,36 @@ class SequentialQueueWorker:
                         runner = CampaignRunner(cid, db, self.smtp_pool, executors)
                         self.active_runners[cid] = runner
                         runner.start()
+                        self._watchdog_state[cid] = {"last_sent": 0, "stale_since": None}
+
+                # Fix 6: Watchdog — auto-pause stuck campaigns (throttled to every 60s)
+                now_wd = time.time()
+                if now_wd - self._watchdog_last_run >= self._WATCHDOG_INTERVAL:
+                    self._watchdog_last_run = now_wd
+                    for cid in list(self.active_runners.keys()):
+                        try:
+                            with db._get_conn() as conn:
+                                sent_row = conn.execute(
+                                    "SELECT COUNT(*) as cnt FROM send_log WHERE campaign_id = ? AND status = 'sent'",
+                                    (cid,)
+                                ).fetchone()
+                            current_sent = sent_row['cnt'] if sent_row else 0
+                            state = self._watchdog_state.get(cid, {})
+                            
+                            if current_sent > state.get('last_sent', 0):
+                                self._watchdog_state[cid] = {"last_sent": current_sent, "stale_since": None}
+                            else:
+                                if state.get('stale_since') is None:
+                                    self._watchdog_state[cid] = {"last_sent": current_sent, "stale_since": time.time()}
+                                elif time.time() - state['stale_since'] > self._WATCHDOG_STALE_LIMIT:
+                                    print(f"WATCHDOG: Campaign #{cid} stuck for 30m+ with no progress. Auto-pausing.")
+                                    with db._get_conn() as conn:
+                                        conn.execute("UPDATE campaigns SET status = 'paused' WHERE id = ?", (cid,))
+                                        conn.commit()
+                                    sync_broadcast({"type": "status", "campaign_id": cid, "status": "paused"})
+                                    self._watchdog_state.pop(cid, None)
+                        except Exception as e:
+                            print(f"WATCHDOG ERROR for #{cid}: {e}")
 
                 self.alert_event.wait(5) # Wait 5s or until alerted
                 self.alert_event.clear()
@@ -621,101 +710,57 @@ async def stop_campaign(campaign_id: int):
     return {"status": "stopped"}
 
 def run_campaign_async(campaign_id: int):
-    """Bridge for APScheduler to run the campaign in background."""
-    import time
-    from data.db import get_campaign
+    """
+    Fix 4: Non-blocking campaign launcher for APScheduler.
+    Instead of running a synchronous SMTP loop (which blocked for the entire campaign),
+    this now just transitions send_log entries from 'scheduled' → 'queued' and sets
+    campaign status to 'running'. The SequentialQueueWorker picks them up automatically.
+    """
+    from data.db import get_campaign, get_db, update_campaign_progress
+    
     camp = get_campaign(campaign_id)
-    if not camp: return
+    if not camp:
+        print(f"SCHEDULER: Campaign #{campaign_id} not found. Skipping.")
+        return
     
-    # Reconstruct the CampaignLaunchRequest from DB
-    from api_bridge import CampaignLaunchRequest, process_campaign_bulk
-    import json
-    
-    # If it's a single email, data is stored in row_data or similar, 
-    # but for simplicity we assume we fetch from send_log if needed, 
-    # or just use the data passed at creation.
-    # For now, we assume the campaign record has everything.
-    
-    # We need to handle the 'data' field which might not be in the campaign table yet.
-    # I'll update the logic to store 'data' as JSON in a new column if necessary, 
-    # but more robustly I can fetch from send_log 'draft' entries.
-    
-    # Actually, a better way: 
-    # When scheduling, we create the campaign and the send_log entries with status 'pending'/'scheduled'.
-    # then run_campaign_async processes those 'scheduled' entries.
-    
-    from data.db import get_db
     db = get_db()
     
+    # Transition all 'scheduled' entries to 'queued' so the queue worker picks them up
     with db._get_conn() as conn:
-        rows = conn.execute("SELECT * FROM send_log WHERE campaign_id = ? AND status = 'scheduled'", (campaign_id,)).fetchall()
-        data = [json.loads(r['row_data']) if r['row_data'] else {} for r in rows]
-        # Ensure recipient_var is handled - we'll assume it's 'recipient' for single emails
-        # For campaigns, we'll store the recipient_var in the campaign record if needed.
-    
-    # For now, let's keep it simple: 
-    # We'll re-implement a minimal process loop here or call process_campaign_bulk with a mock request.
-    from api_bridge import execute_node_dispatch, sync_broadcast
-    from data.db import update_campaign_progress, log_send, get_all_accounts, get_db
-    
-    db = get_db()
-    # Pagination: need the list from 'items'. limit=1000 to cover all accounts for resolving ID.
-    accounts_res = get_all_accounts(limit=1000)
-    accounts = accounts_res.get('items', [])
-    
-    # Get active account from campaign record (parsed from JSON)
-    acc_ids = json.loads(camp['account_ids'])
-    active_acc = next((a for a in accounts if a['id'] == acc_ids[0]), None)
-    if not active_acc: return
-
-    update_campaign_progress(campaign_id, total=len(rows), status="running")
-    queue_worker.alert()
-
-    for i, row_rec in enumerate(rows):
-        t_start = time.time()
-        row = json.loads(row_rec['row_data']) if row_rec['row_data'] else {}
-        target_email = row_rec['recipient']
+        # Count scheduled items
+        count_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM send_log WHERE campaign_id = ? AND status = 'scheduled'",
+            (campaign_id,)
+        ).fetchone()
+        total = count_row['cnt'] if count_row else 0
         
-        subject_f = camp['subject']
-        body_f = camp['body_plain']
-        for k, v in row.items():
-            if v is not None:
-                subject_f = subject_f.replace(f"{{{k}}}", str(v))
-                body_f = body_f.replace(f"{{{k}}}", str(v))
-
-        attachment_path = None
-        attachment_var = row.get('_attachment_var')
-        attachments_batch_id = row.get('_attachments_batch_id')
-        if attachments_batch_id and attachment_var:
-            filename = row.get(attachment_var)
-            if filename:
-                from pathlib import Path
-                possible_path = Path("uploads/attachments") / attachments_batch_id / str(filename)
-                if possible_path.exists():
-                    attachment_path = str(possible_path)
-
+        if total == 0:
+            print(f"SCHEDULER: Campaign #{campaign_id} has no scheduled items. Skipping.")
+            return
+        
+        # Bulk transition: scheduled → queued
+        conn.execute(
+            "UPDATE send_log SET status = 'queued' WHERE campaign_id = ? AND status = 'scheduled'",
+            (campaign_id,)
+        )
+        
+        # Set campaign to running with correct total and delay
         try:
-            import uuid
-            tracking_id = row_rec['tracking_id'] or str(uuid.uuid4())
-            execute_node_dispatch(active_acc, target_email, subject_f, body_f, tracking_id, attachment_path)
-            
-            with db._get_conn() as conn:
-                conn.execute("UPDATE send_log SET status='sent', sent_at=CURRENT_TIMESTAMP WHERE id=?", (row_rec['id'],))
-                conn.commit()
-            sync_broadcast({"type": "sent", "campaign_id": campaign_id, "recipient": target_email, "status": "sent"})
-        except Exception as e:
-            with db._get_conn() as conn:
-                conn.execute("UPDATE send_log SET status='failed', error_msg=? WHERE id=?", (str(e), row_rec['id']))
-                conn.commit()
-            sync_broadcast({"type": "failed", "campaign_id": campaign_id, "recipient": target_email, "status": "failed"})
-        
-        # Delay logic (simplified for scheduler)
-        if i < len(rows) - 1:
-            # We'll assume a default or fetch from campaign if we add it
-            import time
-            time.sleep(1) # Minimal delay for scheduler
-        
-    update_campaign_progress(campaign_id, total=len(rows), status="completed")
+            conn.execute(
+                "UPDATE campaigns SET total = ?, status = 'running', started_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (total, campaign_id)
+            )
+        except Exception:
+            conn.execute(
+                "UPDATE campaigns SET total = ?, status = 'running' WHERE id = ?",
+                (total, campaign_id)
+            )
+        conn.commit()
+    
+    print(f"SCHEDULER: Campaign #{campaign_id} activated with {total} emails. Queue worker will handle dispatch.")
+    sync_broadcast({"type": "status", "campaign_id": campaign_id, "status": "running"})
+    
+    # Alert the queue worker to pick up immediately
     queue_worker.alert()
 
 class TestSendRequest(BaseModel):
@@ -877,8 +922,11 @@ def execute_node_dispatch(acc: dict, to_email: str, subject: str, body: str, tra
         raise last_error
 
     # ── BLAZE MODE: Shadow IMAP Sync (Fire and Forget) ──
-    # We do NOT wait for this. The email is sent. Unblock the engine now!
-    threading.Thread(target=background_imap_sync, args=(acc, to_email, subject, body, tracking_id, attachment_path), daemon=True).start()
+    # Route through the bounded sync_executor (max 3 threads) instead of spawning unlimited threads
+    try:
+        queue_worker.sync_executor.submit(background_imap_sync, acc, to_email, subject, body, tracking_id, attachment_path)
+    except Exception:
+        pass  # IMAP sync is optional — never crash the dispatch path
 
 
 @app.post("/api/test-send")

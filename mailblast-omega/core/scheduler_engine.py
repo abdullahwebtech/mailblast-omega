@@ -40,34 +40,46 @@ class SchedulerEngine:
         )
 
     def _execute_scheduled_job(self, job_record_id, campaign_id):
-        from data.db import get_db
-        from api_bridge import run_campaign_async
-        db = get_db()
+        """Fix 9: Non-blocking scheduled job execution.
+        run_campaign_async is now lightweight (just transitions statuses),
+        but we still run it in a thread to avoid blocking APScheduler's thread pool."""
+        import threading
         
-        # Update status to running
-        with db._get_conn() as conn:
-            conn.execute("UPDATE scheduled_jobs SET status = 'running' WHERE id = ?", (job_record_id,))
-            conn.commit()
+        def _run():
+            from data.db import get_db
+            from api_bridge import run_campaign_async
+            db = get_db()
             
-        # Run the campaign
-        try:
-            run_campaign_async(campaign_id)
+            # Update job status to running
             with db._get_conn() as conn:
-                conn.execute("UPDATE scheduled_jobs SET status = 'done' WHERE id = ?", (job_record_id,))
-        except Exception as e:
-            print(f"Scheduled job {job_record_id} failed: {e}")
-            with db._get_conn() as conn:
-                conn.execute("UPDATE scheduled_jobs SET status = 'failed' WHERE id = ?", (job_record_id,))
+                conn.execute("UPDATE scheduled_jobs SET status = 'running' WHERE id = ?", (job_record_id,))
+                conn.commit()
+                
+            # Run the campaign (now non-blocking: just transitions scheduled → queued)
+            try:
+                run_campaign_async(campaign_id)
+                with db._get_conn() as conn:
+                    conn.execute("UPDATE scheduled_jobs SET status = 'done' WHERE id = ?", (job_record_id,))
+                    conn.commit()
+            except Exception as e:
+                print(f"Scheduled job {job_record_id} failed: {e}")
+                with db._get_conn() as conn:
+                    conn.execute("UPDATE scheduled_jobs SET status = 'failed' WHERE id = ?", (job_record_id,))
+                    conn.commit()
+        
+        threading.Thread(target=_run, daemon=True, name=f"ScheduledJob-{job_record_id}").start()
 
     def schedule_campaign(self, campaign_id: int, run_at_utc: datetime):
         from data.db import get_db
         db = get_db()
         with db._get_conn() as conn:
             cursor = conn.execute(
-                "INSERT INTO scheduled_jobs (campaign_id, scheduled_at, status) VALUES (?, ?, ?)",
+                "INSERT INTO scheduled_jobs (campaign_id, scheduled_at, status) VALUES (?, ?, ?) RETURNING id",
                 (campaign_id, run_at_utc.isoformat(), "pending")
             )
-            job_record_id = cursor.lastrowid
+            row = cursor.fetchone()
+            job_record_id = row[0] if row else cursor.lastrowid
+            conn.commit()
             
         self._add_to_apscheduler(job_record_id, campaign_id, run_at_utc)
         return job_record_id
