@@ -38,8 +38,9 @@ class Database:
             with self._pool_lock:
                 if self._local_pool is None:
                     from psycopg2.pool import ThreadedConnectionPool
-                    self._local_pool = ThreadedConnectionPool(0, 15, dsn=self.db_url)
-                    print("DB_POOL: ThreadedConnectionPool created (0-15 connections)")
+                    # Increase to 60 (Safest limit for Supabase Free Tier direct connections)
+                    self._local_pool = ThreadedConnectionPool(0, 60, dsn=self.db_url)
+                    print("DB_POOL: ThreadedConnectionPool created (0-60 connections for scalable UI)")
         return self._local_pool
 
     def _get_conn(self):
@@ -49,7 +50,7 @@ class Database:
                 self.conn = None
                 self._from_pool = False
             def __enter__(self):
-                MAX_RETRIES = 3
+                MAX_RETRIES = 2
                 for attempt in range(MAX_RETRIES):
                     try:
                         pool = db_ref._get_pool()
@@ -62,18 +63,22 @@ class Database:
                             try: db_ref._get_pool().putconn(self.conn, close=True)
                             except: pass
                             self.conn = None
-                        if attempt < MAX_RETRIES - 1:
-                            time.sleep(0.5 * (2 ** attempt))
-                        else:
-                            # Fallback: direct connection if pool fails
+                        
+                        if "pool exhausted" in str(e).lower() or attempt == MAX_RETRIES - 1:
+                            # CRITICAL FALLBACK: If pool is empty, don't block the UI!
+                            # Open a fresh direct connection instead.
                             try:
+                                print(f"DB_POOL: [WARNING] Pool Saturated. Falling back to direct connection... (Attempt {attempt+1})")
                                 self.conn = psycopg2.connect(db_ref.db_url)
                                 self.conn.autocommit = False
                                 self._from_pool = False
                                 return self
-                            except:
-                                raise e
+                            except Exception as direct_e:
+                                if attempt == MAX_RETRIES - 1: raise direct_e
+                        
+                        time.sleep(0.1 * (2 ** attempt))
                 return self
+
             def __exit__(self, exc_type, exc_val, exc_tb):
                 if not self.conn: return
                 if exc_type:

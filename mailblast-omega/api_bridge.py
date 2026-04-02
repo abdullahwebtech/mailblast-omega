@@ -201,13 +201,13 @@ class SMTPConnectionPool:
                 self.pools.clear()
 
 class CampaignRunner(threading.Thread):
-    """Dedicated thread for a single campaign to ensure exact pacing without blocking others."""
-    def __init__(self, campaign_id, db, smtp_pool, executor):
+    def __init__(self, campaign_id, db, smtp_pool, executors):
         super().__init__(name=f"CampaignRunner-{campaign_id}", daemon=True)
         self.campaign_id = campaign_id
         self.db = db
         self.smtp_pool = smtp_pool
-        self.executor = executor
+        self.dispatch_executor = executors['dispatch']
+        self.sync_executor = executors['sync']
         self.is_running = True
 
     def run(self):
@@ -291,8 +291,8 @@ class CampaignRunner(threading.Thread):
                         self.is_running = False
                         return
 
-                    # Offload SMTP network latency to the executor pool
-                    self.executor.submit(self._dispatch_single, item, camp, self.db)
+                    # Offload SMTP network latency to the dispatch pool
+                    self.dispatch_executor.submit(self._dispatch_single, item, camp, self.db)
 
                     # Pacing Sleep (Rigidly accurate)
                     time.sleep(delay_seconds)
@@ -370,7 +370,7 @@ class CampaignRunner(threading.Thread):
             sync_broadcast({"type": "sent", "campaign_id": campaign['id'], "recipient": recipient, "status": "sent"})
 
             if sent_via_cache:
-                _threading.Thread(target=background_imap_sync, args=(acc_dict, recipient, subject_f, body_f, item['tracking_id'], attachment_path), daemon=True).start()
+                self.sync_executor.submit(background_imap_sync, acc_dict, recipient, subject_f, body_f, item['tracking_id'], attachment_path)
 
         except Exception as e:
             error_msg = str(e)
@@ -452,7 +452,9 @@ class SequentialQueueWorker:
         self.thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.is_running = False
         self.smtp_pool = SMTPConnectionPool(max_connections_per_account=10)
-        self.executor = ThreadPoolExecutor(max_workers=10) # Lowered from 50 to 10 for Render stability
+        # Dedicated thread pools for isolation
+        self.dispatch_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="Dispatch") # SMTP
+        self.sync_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="IMAP") # Shadow Sync
         self.active_runners = {} # campaign_id -> CampaignRunner
         self.alert_event = threading.Event()
 
@@ -483,7 +485,8 @@ class SequentialQueueWorker:
                     cid = row['id']
                     if cid not in self.active_runners:
                         print(f"MANAGER: Spawning parallel runner for Campaign #{cid}")
-                        runner = CampaignRunner(cid, db, self.smtp_pool, self.executor)
+                        executors = {'dispatch': self.dispatch_executor, 'sync': self.sync_executor}
+                        runner = CampaignRunner(cid, db, self.smtp_pool, executors)
                         self.active_runners[cid] = runner
                         runner.start()
 
