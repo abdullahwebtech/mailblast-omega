@@ -98,7 +98,8 @@ async def trash_cleanup_loop():
     import asyncio
     while True:
         try:
-            cleanup_expired_trash()
+            # Fix 10: Offload blocking DB cleanup to executor to prevent Event Loop stalls
+            await main_loop.run_in_executor(None, cleanup_expired_trash)
             print("TRASH: Running 7-day expiration cleanup...")
         except Exception as e:
             print(f"TRASH ERROR: {e}")
@@ -110,12 +111,17 @@ async def startup_event():
     import asyncio
     main_loop = asyncio.get_running_loop()
     
-    # Fix 2: Pre-warm the database schema before accepting traffic so Render pings don't timeout
+    # Fix 11: Decoupled DB Bootstrapping from health-check sequence.
+    # We trigger the pre-warm in the background so Render's "/" ping is served immediately.
     from data.db import get_db
-    try:
-        await main_loop.run_in_executor(None, get_db)
-    except Exception as e:
-        print(f"STARTUP DB INIT WARNING: {e}")
+    def background_db_init():
+        try:
+            db = get_db()
+            db._init_db() # Explicit schema pre-warm
+        except Exception as e:
+            print(f"BACKGROUND DB INIT ERROR: {e}")
+            
+    main_loop.run_in_executor(None, background_db_init)
     
     # Start the robust sequential queue worker
     queue_worker.start()

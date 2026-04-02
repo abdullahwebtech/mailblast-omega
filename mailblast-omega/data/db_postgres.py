@@ -21,16 +21,12 @@ class Database:
         if "sslmode=" not in self.db_url:
             separator = "&" if "?" in self.db_url else "?"
             self.db_url += f"{separator}sslmode=require"
-        
+            
         self._local_pool = None
         self._pool_lock = __import__('threading').Lock()
+        self._schema_initialized = False
         
-        print(f"DB_INIT: Connecting to PostgreSQL (pooled mode, same-region)")
-        try:
-            self._init_db()
-            print("DB_INIT: Schema initialized successfully.")
-        except Exception as e:
-            print(f"DB_INIT: Schema init deferred - {e}")
+        print(f"DB_INIT: PostgreSQL object created (Initialization deferred)")
 
     def _get_pool(self):
         """Lazy-create the connection pool on first use."""
